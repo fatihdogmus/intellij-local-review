@@ -8,14 +8,16 @@ import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.DumbAwareAction
+import com.intellij.openapi.vcs.changes.ui.ChangesViewContentManager
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.util.containers.ContainerUtil
 import com.intellij.vcs.log.VcsLogCommitSelection
 import com.intellij.vcs.log.VcsLogDataKeys
 import dev.agentreview.intellij.ReviewFileNavigator
 import dev.agentreview.intellij.ReviewManagerService
+import dev.agentreview.intellij.VcsLogReviewSupport
 import dev.agentreview.intellij.diff.REVIEW_DIFF_EDITOR_KEY
 import dev.agentreview.intellij.export.ExportUiSupport
-import dev.agentreview.intellij.ui.NewReviewDialog
 import dev.agentreview.intellij.ui.showInlineCommentForm
 import dev.agentreview.intellij.vcs.ChangedFileStatus
 
@@ -29,14 +31,7 @@ class StartUncommittedReviewAction : DumbAwareAction() {
 class StartReviewFromCommitHashAction : DumbAwareAction() {
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
-        val dialog = NewReviewDialog(project)
-        if (!dialog.showAndGet()) return
-        val commitHashes = dialog.commitHashes()
-        if (commitHashes.isEmpty()) return
-        backgroundReviewTask(project, if (commitHashes.size == 1) "Creating commit review" else "Creating combined commit review") {
-            val manager = ReviewManagerService.getInstance(project)
-            manager.createCommitRangeReview(commitHashes)
-        }
+        VcsLogReviewSupport.openLogAndPromptSelection(project)
     }
 }
 
@@ -46,7 +41,11 @@ class StartReviewFromGitLogAction : DumbAwareAction() {
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
         val selection = event.getData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION) ?: return
-        backgroundReviewTask(project, "Creating review from Git Log") {
+        backgroundReviewTask(
+            project,
+            "Creating review from Git Log",
+            onSuccess = { hideVcsLogToolWindow(project) },
+        ) {
             val manager = ReviewManagerService.getInstance(project)
             manager.createCommitRangeReview(selectedCommitHashes(selection))
         }
@@ -141,10 +140,20 @@ class OpenReviewDialogAction : DumbAwareAction() {
 private fun selectedCommitHashes(selection: VcsLogCommitSelection): List<String> =
     ContainerUtil.map(selection.commits) { it.hash.asString() }
 
-private fun backgroundReviewTask(project: Project, title: String, action: () -> Unit) {
+private fun backgroundReviewTask(project: Project, title: String, onSuccess: () -> Unit = {}, action: () -> Unit) {
     object : Task.Backgroundable(project, title, false) {
         override fun run(indicator: ProgressIndicator) {
             action()
         }
+
+        override fun onSuccess() {
+            onSuccess()
+        }
     }.queue()
+}
+
+private fun hideVcsLogToolWindow(project: Project) {
+    ToolWindowManager.getInstance(project)
+        .getToolWindow(ChangesViewContentManager.TOOLWINDOW_ID)
+        ?.hide(null)
 }

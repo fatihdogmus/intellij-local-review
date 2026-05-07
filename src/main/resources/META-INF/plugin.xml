@@ -37,13 +37,14 @@
         <action
             id="LocalReview.StartReviewFromGitLog"
             class="dev.agentreview.intellij.actions.StartReviewFromGitLogAction"
-            text="Start Review from Selected Commit(s)">
+            text="Create Local Review">
             <add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
+            <add-to-group group-id="Vcs.Log.Toolbar.RightCorner" anchor="last"/>
         </action>
         <action
             id="LocalReview.StartReviewFromCommitHash"
             class="dev.agentreview.intellij.actions.StartReviewFromCommitHashAction"
-            text="Start Review from Commit Picker..."/>
+            text="Pick Commit in VCS Log..."/>
         <action
             id="LocalReview.AddComment"
             class="dev.agentreview.intellij.actions.AddReviewCommentAction"

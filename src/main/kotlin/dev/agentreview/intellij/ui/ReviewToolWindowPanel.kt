@@ -27,6 +27,7 @@ import com.intellij.util.ui.JBUI
 import dev.agentreview.intellij.editor.ReviewPageManager
 import dev.agentreview.intellij.ReviewFileNavigator
 import dev.agentreview.intellij.ReviewManagerService
+import dev.agentreview.intellij.VcsLogReviewSupport
 import dev.agentreview.intellij.model.CommentStatus
 import dev.agentreview.intellij.diff.DiffRequestBuilder
 import dev.agentreview.intellij.diff.ReviewDiffPanel
@@ -241,7 +242,7 @@ class ReviewToolWindowPanel(
 
     private fun showCreateReviewMenu() {
         val group = DefaultActionGroup().apply {
-            add(object : DumbAwareAction("Select Commit") {
+            add(object : DumbAwareAction("Pick in VCS Log") {
                 override fun actionPerformed(event: AnActionEvent) {
                     startCommitReview()
                 }
@@ -393,13 +394,7 @@ class ReviewToolWindowPanel(
     private fun selectedReview(): Review? = (reviewSelector.selectedItem as? Review) ?: manager.getCurrentReview()
 
     private fun startCommitReview() {
-        val dialog = NewReviewDialog(project)
-        if (!dialog.showAndGet()) return
-        val commitHashes = dialog.commitHashes()
-        if (commitHashes.isEmpty()) return
-        runReviewCreationTask(if (commitHashes.size == 1) "Creating commit review" else "Creating combined commit review") {
-            manager.createCommitRangeReview(commitHashes)
-        }
+        VcsLogReviewSupport.openLogAndPromptSelection(project)
     }
 
     private fun startBranchReview() {
