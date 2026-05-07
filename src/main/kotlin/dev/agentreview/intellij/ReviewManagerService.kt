@@ -10,7 +10,6 @@ import dev.agentreview.intellij.editor.ReviewPageManager
 import dev.agentreview.intellij.diff.DiffContextExtractor
 import dev.agentreview.intellij.export.AgentPromptBuilder
 import dev.agentreview.intellij.model.AgentMetadata
-import dev.agentreview.intellij.model.CommentSeverity
 import dev.agentreview.intellij.model.CommentStatus
 import dev.agentreview.intellij.model.DiffSide
 import dev.agentreview.intellij.model.Review
@@ -86,25 +85,25 @@ class ReviewManagerService(private val project: Project) {
     }
 
     fun createUncommittedReview(): Review? {
-        syncUncommittedReviewState()
-        findUncommittedReview()?.let {
-            openReview(it.id)
-            return it
-        }
-        if (currentUncommittedChanges().isEmpty()) return null
-
-        val repositoryRoot = repositoryRootResolver()
-        val review = Review(
-            id = UUID.randomUUID().toString(),
-            title = "Uncommitted changes",
-            target = ReviewTarget(type = ReviewTargetType.UNCOMMITTED, baseRef = "HEAD", headRef = "WORKTREE"),
-            repositoryRoot = repositoryRoot,
-            createdAt = nowIso(),
-            updatedAt = nowIso(),
-        )
-        stateService.addReview(review)
+        val review = ensureUncommittedReview()
         openReview(review.id)
         return review
+    }
+
+    fun openDefaultReview() {
+        val review = ensureUncommittedReview()
+        currentReviewId = review.id
+        currentFilePath = null
+        if (ApplicationManager.getApplication().isUnitTestMode) {
+            notifyChanged()
+            return
+        }
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed) {
+                ReviewPageManager.getInstance(project).open()
+            }
+            notifyChanged()
+        }
     }
 
     fun createCommitReview(commitHash: String): Review {
@@ -127,10 +126,33 @@ class ReviewManagerService(private val project: Project) {
         return review
     }
 
+    fun createCommitRangeReview(commitHashes: List<String>): Review {
+        require(commitHashes.isNotEmpty()) { "commitHashes must not be empty" }
+        if (commitHashes.size == 1) return createCommitReview(commitHashes.single())
+
+        val metadata = CommitChangesProvider(project).getCombinedCommitMetadata(commitHashes)
+        val review = Review(
+            id = UUID.randomUUID().toString(),
+            title = metadata.title,
+            target = ReviewTarget(
+                type = ReviewTargetType.COMMIT_RANGE,
+                baseRef = metadata.baseHash,
+                headRef = metadata.headHash,
+            ),
+            repositoryRoot = metadata.repositoryRoot,
+            createdAt = nowIso(),
+            updatedAt = nowIso(),
+        )
+        stateService.addReview(review)
+        openReview(review.id)
+        return review
+    }
+
     fun deleteReview(reviewId: String) {
+        if (findReview(reviewId)?.target?.type == ReviewTargetType.UNCOMMITTED) return
         stateService.removeReview(reviewId)
         if (currentReviewId == reviewId) {
-            currentReviewId = null
+            currentReviewId = findUncommittedReview()?.id
             currentFilePath = null
         }
         notifyChanged()
@@ -143,7 +165,10 @@ class ReviewManagerService(private val project: Project) {
             changedFiles
         }
         ReviewTargetType.COMMIT -> CommitChangesProvider(project).getChangedFiles(review.target.commitHash ?: error("Commit hash missing"))
-        ReviewTargetType.COMMIT_RANGE -> emptyList()
+        ReviewTargetType.COMMIT_RANGE -> CommitChangesProvider(project).getChangedFilesForRange(
+            review.target.baseRef ?: error("Base ref missing"),
+            review.target.headRef ?: error("Head ref missing"),
+        )
     }
 
     fun addComment(
@@ -152,7 +177,6 @@ class ReviewManagerService(private val project: Project) {
         side: DiffSide,
         lineNumber: Int,
         body: String,
-        severity: CommentSeverity = CommentSeverity.NOTE,
         endLineNumber: Int? = null,
     ) {
         val review = findReview(reviewId) ?: return
@@ -162,7 +186,6 @@ class ReviewManagerService(private val project: Project) {
             filePath = changedFile.filePath,
             anchor = diffContextExtractor.buildAnchor(changedFile, side, lineNumber, review.target.commitHashIfAny(), endLineNumber),
             body = body,
-            severity = severity,
             status = CommentStatus.OPEN,
             createdAt = nowIso(),
             updatedAt = nowIso(),
@@ -171,10 +194,9 @@ class ReviewManagerService(private val project: Project) {
         touch(review)
     }
 
-    fun updateComment(commentId: String, body: String, severity: CommentSeverity, status: CommentStatus) {
+    fun updateComment(commentId: String, body: String, status: CommentStatus) {
         val (review, comment) = findComment(commentId) ?: return
         comment.body = body
-        comment.severity = severity
         comment.status = status
         comment.updatedAt = nowIso()
         touch(review)
@@ -215,12 +237,15 @@ class ReviewManagerService(private val project: Project) {
 
     fun buildAgentPrompt(reviewId: String): String? = findReview(reviewId)?.let { AgentPromptBuilder().build(it) }
 
-    fun confirmDelete(review: Review): Boolean = Messages.showYesNoDialog(
-        project,
-        "Delete review '${review.title}'? Comments will be removed too.",
-        "Delete Review",
-        Messages.getQuestionIcon(),
-    ) == Messages.YES
+    fun confirmDelete(review: Review): Boolean {
+        if (review.target.type == ReviewTargetType.UNCOMMITTED) return false
+        return Messages.showYesNoDialog(
+            project,
+            "Delete review '${review.title}'? Comments will be removed too.",
+            "Delete Review",
+            Messages.getQuestionIcon(),
+        ) == Messages.YES
+    }
 
     fun addListener(listener: () -> Unit) {
         listeners.add(listener)
@@ -254,18 +279,14 @@ class ReviewManagerService(private val project: Project) {
 
     internal fun syncUncommittedReviewState(notify: Boolean = true): Boolean {
         val uncommittedReviews = stateService.reviews().filter { it.target.type == ReviewTargetType.UNCOMMITTED }
-        if (uncommittedReviews.isEmpty()) return false
-
-        val keepReview = if (hasUncommittedChanges()) uncommittedReviews.maxByOrNull { it.updatedAt } else null
-        val removedIds = uncommittedReviews.filter { it.id != keepReview?.id }.map { it.id }
-        if (removedIds.isEmpty() && (keepReview == null || currentReviewId != null && currentReviewId !in removedIds)) return false
+        val keepReview = uncommittedReviews.maxByOrNull { it.updatedAt } ?: createNewUncommittedReview()
+        val removedIds = uncommittedReviews.filter { it.id != keepReview.id }.map { it.id }
+        val shouldSelectUncommitted = currentReviewId == null
+        if (removedIds.isEmpty() && !shouldSelectUncommitted) return false
 
         removedIds.forEach(stateService::removeReview)
 
-        if (keepReview == null && currentReviewId in uncommittedReviews.map { it.id }) {
-            currentReviewId = null
-            currentFilePath = null
-        } else if (keepReview != null && currentReviewId in removedIds) {
+        if (currentReviewId in removedIds || shouldSelectUncommitted) {
             currentReviewId = keepReview.id
             currentFilePath = null
         }
@@ -279,6 +300,29 @@ class ReviewManagerService(private val project: Project) {
     private fun hasUncommittedChanges(): Boolean = hasUncommittedChangesSupplier()
 
     private fun currentUncommittedChanges(): List<ChangedFile> = runCatching { uncommittedChangesLoader() }.getOrElse { emptyList() }
+
+    private fun ensureUncommittedReview(): Review {
+        syncUncommittedReviewState(notify = false)
+        return findUncommittedReview() ?: createNewUncommittedReview().also {
+            if (currentReviewId == null) {
+                currentReviewId = it.id
+            }
+        }
+    }
+
+    private fun createNewUncommittedReview(): Review {
+        val now = nowIso()
+        val review = Review(
+            id = UUID.randomUUID().toString(),
+            title = "Uncommitted changes",
+            target = ReviewTarget(type = ReviewTargetType.UNCOMMITTED, baseRef = "HEAD", headRef = "WORKTREE"),
+            repositoryRoot = repositoryRootResolver(),
+            createdAt = now,
+            updatedAt = now,
+        )
+        stateService.addReview(review)
+        return review
+    }
 
     private fun findComment(commentId: String): Pair<Review, ReviewComment>? {
         stateService.reviews().forEach { review ->

@@ -17,11 +17,15 @@ import dev.agentreview.intellij.diff.DiffRequestBuilder
 import dev.agentreview.intellij.diff.ReviewDiffPanel
 import dev.agentreview.intellij.export.ExportUiSupport
 import dev.agentreview.intellij.model.Review
+import dev.agentreview.intellij.model.ReviewTargetType
 import dev.agentreview.intellij.vcs.ChangedFile
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.RenderingHints
 import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.JButton
 import javax.swing.JComboBox
@@ -42,7 +46,7 @@ class ReviewToolWindowPanel(
     private val changedFilesPanel = ChangedFilesPanel()
     private val contentPanel = JPanel(BorderLayout())
     private val reviewSelector = JComboBox<Review>()
-    private val deleteReviewButton = JButton("Delete")
+    private val deleteReviewButton = RoundedToolbarButton("Delete")
     private var updatingReviewSelector = false
     private val stateListener: () -> Unit = { refreshUi() }
     private val changedFilesByReviewId = mutableMapOf<String, List<ChangedFile>>()
@@ -107,10 +111,18 @@ class ReviewToolWindowPanel(
     private fun refreshDiff() {
         val changedFile = changedFilesPanel.selectedFile()
         val reviewId = manager.currentReviewId
+        val review = manager.getCurrentReview()
         if (reviewId == null) {
             diffPanel.showDiff(MessageDiffRequest("Select review from dropdown above."))
-        } else if (changedFilesByReviewId[reviewId].isNullOrEmpty()) {
+        } else if (!changedFilesByReviewId.containsKey(reviewId)) {
             diffPanel.showDiff(MessageDiffRequest("Loading changed files..."))
+        } else if (changedFilesByReviewId[reviewId].isNullOrEmpty()) {
+            val message = if (review?.target?.type == ReviewTargetType.UNCOMMITTED) {
+                "No uncommitted changes."
+            } else {
+                "No changed files in this review."
+            }
+            diffPanel.showDiff(MessageDiffRequest(message))
         } else if (changedFile == null) {
             diffPanel.showDiff(MessageDiffRequest("Select changed file to review."))
         } else {
@@ -119,7 +131,7 @@ class ReviewToolWindowPanel(
     }
 
     private fun loadChangedFilesIfNeeded(review: Review) {
-        if (changedFilesByReviewId.containsKey(review.id)) return
+        if (review.target.type != ReviewTargetType.UNCOMMITTED && changedFilesByReviewId.containsKey(review.id)) return
         val requestId = changedFilesLoadSequence.incrementAndGet()
         object : Task.Backgroundable(project, "Loading review changes", false) {
             private var changedFiles: List<ChangedFile> = emptyList()
@@ -169,9 +181,8 @@ class ReviewToolWindowPanel(
 
         val primaryActions = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
             isOpaque = false
-            add(JButton("Uncommitted").applyToolbarActionStyle().apply { addActionListener { startUncommittedReview() } })
-            add(JButton("Select Commit").applyToolbarActionStyle().apply { addActionListener { startCommitReview() } })
-            add(JButton("Copy Prompt").applyToolbarActionStyle().apply { addActionListener { copyPrompt() } })
+            add(RoundedToolbarButton("Select Commit").applyToolbarActionStyle().apply { addActionListener { startCommitReview() } })
+            add(RoundedToolbarButton("Copy Prompt").applyToolbarActionStyle().apply { addActionListener { copyPrompt() } })
         }
 
         val rightSide = JPanel(BorderLayout(12, 0)).apply {
@@ -194,15 +205,9 @@ class ReviewToolWindowPanel(
             reviews.forEach(reviewSelector::addItem)
             val selected = reviews.firstOrNull { it.id == manager.currentReviewId }
             reviewSelector.selectedItem = selected
-            deleteReviewButton.isEnabled = selected != null
+            deleteReviewButton.isEnabled = selected?.target?.type != ReviewTargetType.UNCOMMITTED
         } finally {
             updatingReviewSelector = false
-        }
-    }
-
-    private fun startUncommittedReview() {
-        runReviewCreationTask("Creating uncommitted review") {
-            manager.createUncommittedReview()
         }
     }
 
@@ -211,14 +216,14 @@ class ReviewToolWindowPanel(
         if (!dialog.showAndGet()) return
         val commitHashes = dialog.commitHashes()
         if (commitHashes.isEmpty()) return
-        runReviewCreationTask(if (commitHashes.size == 1) "Creating commit review" else "Creating commit reviews") {
-            commitHashes.forEach(manager::createCommitReview)
+        runReviewCreationTask(if (commitHashes.size == 1) "Creating commit review" else "Creating combined commit review") {
+            manager.createCommitRangeReview(commitHashes)
         }
     }
 
     private fun copyPrompt() {
         val review = manager.getCurrentReview() ?: return
-        manager.buildAgentPrompt(review.id)?.let(ExportUiSupport::copyToClipboard)
+        manager.buildAgentPrompt(review.id)?.let { ExportUiSupport.copyToClipboard(project, it) }
     }
 
     private fun runReviewCreationTask(title: String, action: () -> Unit) {
@@ -263,21 +268,42 @@ private fun createCardPanel(): JPanel = JPanel(BorderLayout(12, 0)).apply {
 private fun JButton.applyToolbarActionStyle(): JButton = apply {
     background = JBColor(Color(0xEAF1FC), Color(0x303847))
     foreground = JBColor(Color(0x274E86), Color(0xC2D8FF))
-    border = JBUI.Borders.compound(
-        JBUI.Borders.customLine(JBColor(Color(0xB8CAE6), Color(0x4C5A70)), 1),
-        JBUI.Borders.empty(7, 12),
-    )
-    isOpaque = true
+    border = JBUI.Borders.empty(8, 16)
+    isOpaque = false
+    isContentAreaFilled = false
     isFocusPainted = false
+    putClientProperty(ROUNDED_BUTTON_BORDER_COLOR, JBColor(Color(0xB8CAE6), Color(0x4C5A70)))
 }
 
 private fun JButton.applyDestructiveStyle(): JButton = apply {
     background = JBColor(Color(0xFB, 0xE9, 0xE7), Color(0x3A, 0x25, 0x25))
     foreground = JBColor(Color(0xB4, 0x23, 0x18), Color(0xFF, 0xA1, 0x9A))
-    border = JBUI.Borders.compound(
-        JBUI.Borders.customLine(JBColor(Color(0xEA, 0xC1, 0xBD), Color(0x6A, 0x3F, 0x3F)), 1),
-        JBUI.Borders.empty(7, 12),
-    )
-    isOpaque = true
+    border = JBUI.Borders.empty(8, 16)
+    isOpaque = false
+    isContentAreaFilled = false
     isFocusPainted = false
+    putClientProperty(ROUNDED_BUTTON_BORDER_COLOR, JBColor(Color(0xEA, 0xC1, 0xBD), Color(0x6A, 0x3F, 0x3F)))
+}
+
+private const val ROUNDED_BUTTON_BORDER_COLOR = "local.review.roundedButtonBorderColor"
+
+private class RoundedToolbarButton(text: String) : JButton(text) {
+    private val arc = JBUI.scale(18)
+
+    override fun paintComponent(graphics: Graphics) {
+        val g2 = graphics.create() as Graphics2D
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.color = background
+            g2.fillRoundRect(0, 0, width - 1, height - 1, arc, arc)
+            val borderColor = getClientProperty(ROUNDED_BUTTON_BORDER_COLOR) as? Color
+            if (borderColor != null) {
+                g2.color = borderColor
+                g2.drawRoundRect(0, 0, width - 1, height - 1, arc, arc)
+            }
+        } finally {
+            g2.dispose()
+        }
+        super.paintComponent(graphics)
+    }
 }

@@ -4,7 +4,6 @@ import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.agentreview.intellij.export.AgentPromptBuilder
 import dev.agentreview.intellij.model.CommentAnchor
-import dev.agentreview.intellij.model.CommentSeverity
 import dev.agentreview.intellij.model.CommentStatus
 import dev.agentreview.intellij.model.DiffSide
 import dev.agentreview.intellij.model.Review
@@ -42,7 +41,7 @@ class AgentReviewPluginTest {
         assertThat(exported)
             .contains("- Commit Hash: `abc123def456`")
             .contains("Avoid !! here.")
-            .contains("- Status: OPEN")
+            .contains("- Comment:")
     }
 
     @Test
@@ -62,8 +61,7 @@ class AgentReviewPluginTest {
 
         assertThat(exported)
             .contains("- Lines: 47-49")
-            .contains("**Selected Text**")
-            .contains("repo.find(id)!!\nreturn user\n}")
+            .doesNotContain("**Selected Text**")
     }
 
     private fun sampleReview(): Review = Review(
@@ -89,12 +87,11 @@ class AgentReviewPluginTest {
                     newLine = 47,
                     endNewLine = 49,
                     selectedText = "repo.find(id)!!\nreturn user\n}",
-                    beforeContext = listOf("fun findUser(id: UserId): User {") ,
+                    beforeContext = listOf("fun findUser(id: UserId): User {"),
                     afterContext = listOf("}"),
                     commitHash = "abc123def456",
                 ),
                 body = "Avoid !! here.",
-                severity = CommentSeverity.MUST_FIX,
                 status = CommentStatus.OPEN,
                 createdAt = "2026-05-07T14:20:00+03:00",
                 updatedAt = "2026-05-07T14:20:00+03:00",

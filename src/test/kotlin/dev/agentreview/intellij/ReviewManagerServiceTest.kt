@@ -2,7 +2,6 @@ package dev.agentreview.intellij
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.agentreview.intellij.model.CommentSeverity
 import dev.agentreview.intellij.model.DiffSide
 import dev.agentreview.intellij.model.Review
 import dev.agentreview.intellij.model.ReviewTarget
@@ -19,9 +18,9 @@ class ReviewManagerServiceTest {
     private val project by projectFixture()
 
     @Test
-    fun addCommentUsesDefaultSeverityAndMultiLineAnchor() {
+    fun addCommentBuildsMultiLineAnchor() {
         val manager = ReviewManagerService.getInstance(project)
-        val review = seededReview("default-severity")
+        val review = seededReview("multi-line-anchor")
         ReviewStateService.getInstance(project).addReview(review)
 
         manager.addComment(
@@ -35,7 +34,7 @@ class ReviewManagerServiceTest {
 
         val comment = manager.findReview(review.id)?.comments?.single()
         assertThat(comment).isNotNull
-        assertThat(comment!!.severity).isEqualTo(CommentSeverity.NOTE)
+        assertThat(comment!!.body).isEqualTo("Need cleanup")
         assertThat(comment.anchor.newLine).isEqualTo(2)
         assertThat(comment.anchor.endNewLine).isEqualTo(3)
         assertThat(comment.anchor.selectedText).isEqualTo("two\nthree")
@@ -78,19 +77,29 @@ class ReviewManagerServiceTest {
     }
 
     @Test
-    fun syncUncommittedReviewStateRemovesReviewWhenChangesGone() {
+    fun syncUncommittedReviewStateKeepsReviewWhenChangesGone() {
         val manager = ReviewManagerService.getInstance(project)
         manager.hasUncommittedChangesSupplier = { false }
         manager.uncommittedChangesLoader = { emptyList() }
-        val review = seededReview("stale-uncommitted")
-        ReviewStateService.getInstance(project).addReview(review)
+        manager.repositoryRootResolver = { "/tmp/repo" }
+        val review = manager.createUncommittedReview()!!
         manager.selectReview(review.id)
 
         val changed = manager.syncUncommittedReviewState()
 
-        assertThat(changed).isTrue()
-        assertThat(manager.findReview(review.id)).isNull()
-        assertThat(manager.getCurrentReview()).isNull()
+        assertThat(changed).isFalse()
+        assertThat(manager.findReview(review.id)).isNotNull
+        assertThat(manager.getCurrentReview()?.id).isEqualTo(review.id)
+    }
+
+    @Test
+    fun initCreatesPersistentUncommittedReview() {
+        val manager = ReviewManagerService.getInstance(project)
+
+        val uncommittedReviews = manager.listReviews().filter { it.target.type == ReviewTargetType.UNCOMMITTED }
+
+        assertThat(uncommittedReviews).hasSize(1)
+        assertThat(manager.getCurrentReview()?.id).isEqualTo(uncommittedReviews.single().id)
     }
 
     private fun seededReview(suffix: String): Review = Review(

@@ -12,12 +12,14 @@ import dev.agentreview.intellij.persistence.ReviewStateService
 import dev.agentreview.intellij.vcs.ChangedFile
 import dev.agentreview.intellij.vcs.ChangedFileStatus
 import dev.agentreview.intellij.vcs.ReviewContent
+import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
 @TestApplication
 class ReviewMcpToolsetTest {
     private val project by projectFixture()
+    private val json = Json { ignoreUnknownKeys = true }
 
     @Test
     suspend fun reviewListUnresolvedCommentsUsesCurrentReviewByDefault() {
@@ -31,7 +33,7 @@ class ReviewMcpToolsetTest {
         manager.markCommentResolved(resolved.id)
         manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 3, "rename variable")
 
-        val result = ReviewMcpToolset().reviewListUnresolvedComments()
+        val result = json.decodeFromString<CommentListResult>(ReviewMcpToolset().reviewListUnresolvedComments())
 
         assertThat(result.comments).hasSize(1)
         assertThat(result.comments.single().body).isEqualTo("rename variable")
@@ -50,7 +52,9 @@ class ReviewMcpToolsetTest {
         )
         ReviewStateService.getInstance(project).addReview(review)
 
-        val result = ReviewMcpToolset().reviewGetReview(selector = "commit:mcp987", includeComments = false)
+        val result = json.decodeFromString<ReviewResult>(
+            ReviewMcpToolset().reviewGetReview(selector = "commit:mcp987", includeComments = false),
+        )
 
         assertThat(result.review.id).isEqualTo(review.id)
         assertThat(result.review.target.type).isEqualTo(ReviewTargetType.COMMIT)
@@ -66,11 +70,13 @@ class ReviewMcpToolsetTest {
         manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 2, "avoid bang bang")
         val comment = manager.findReview(review.id)?.comments?.single() ?: error("comment missing")
 
-        val result = ReviewMcpToolset().reviewMarkCommentAddressed(
-            commentId = comment.id,
-            message = "Replaced with explicit null branch",
-            agentName = "codex",
-            runId = "run-42",
+        val result = json.decodeFromString<MutationResult>(
+            ReviewMcpToolset().reviewMarkCommentAddressed(
+                commentId = comment.id,
+                message = "Replaced with explicit null branch",
+                agentName = "codex",
+                runId = "run-42",
+            ),
         )
 
         val updated = manager.findReview(review.id)?.comments?.single() ?: error("updated comment missing")

@@ -3,7 +3,6 @@ package dev.agentreview.intellij
 import dev.agentreview.intellij.diff.DiffContextExtractor
 import dev.agentreview.intellij.export.AgentPromptBuilder
 import dev.agentreview.intellij.model.CommentAnchor
-import dev.agentreview.intellij.model.CommentSeverity
 import dev.agentreview.intellij.model.CommentStatus
 import dev.agentreview.intellij.model.DiffSide
 import dev.agentreview.intellij.model.Review
@@ -24,8 +23,8 @@ class ReviewUnitTest {
 
         assertThat(exported)
             .contains("### Comment 1")
-            .contains("- Severity: MUST_FIX")
-            .contains("**Selected Text**")
+            .contains("- Lines: 47")
+            .contains("- Comment:")
     }
 
     @Test
@@ -36,7 +35,6 @@ class ReviewUnitTest {
 
         assertThat(exported)
             .contains("Use <safe> & clear")
-            .contains("- Status: OPEN")
             .contains("- Repository Root: `/tmp/repo`")
     }
 
@@ -93,7 +91,6 @@ class ReviewUnitTest {
                     commitHash = "abc123def456",
                 ),
                 body = "Avoid !! here.",
-                severity = CommentSeverity.MUST_FIX,
                 status = CommentStatus.OPEN,
                 createdAt = "2026-05-07T14:20:00+03:00",
                 updatedAt = "2026-05-07T14:20:00+03:00",

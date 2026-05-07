@@ -21,12 +21,56 @@ class CommitChangesProvider(private val project: Project) {
 
     fun getChangedFiles(commitHash: String): List<ChangedFile> {
         val metadata = getCommitMetadata(commitHash)
-        val git = GitCommandFallback(metadata.repositoryRoot)
-        val parent = metadata.firstParentHash ?: EMPTY_TREE
-        return git.run("diff", "--name-status", parent, metadata.hash)
+        return getChangedFilesBetween(
+            repositoryRoot = metadata.repositoryRoot,
+            baseRevision = metadata.firstParentHash ?: EMPTY_TREE,
+            headRevision = metadata.hash,
+        )
+    }
+
+    fun getCombinedCommitMetadata(commitHashes: List<String>): CombinedCommitMetadata {
+        require(commitHashes.isNotEmpty()) { "commitHashes must not be empty" }
+
+        val repositoryRoot = GitRepositoryResolver(project).resolveRepositoryRoot()
+        val git = GitCommandFallback(repositoryRoot)
+        val orderedHashes = commitHashes
+            .distinct()
+            .map { hash ->
+                val fullHash = git.run("rev-parse", hash).trim()
+                val timestamp = git.run("show", "-s", "--format=%ct", fullHash).trim().toLong()
+                val subject = git.run("show", "-s", "--format=%s", fullHash).trim()
+                CommitPoint(fullHash, timestamp, subject)
+            }
+            .sortedBy { it.timestamp }
+
+        val oldest = orderedHashes.first()
+        val newest = orderedHashes.last()
+        val parentLine = git.run("rev-list", "--parents", "-n", "1", oldest.hash).trim().split(' ')
+        val baseHash = parentLine.getOrNull(1) ?: EMPTY_TREE
+
+        return CombinedCommitMetadata(
+            repositoryRoot = repositoryRoot,
+            baseHash = baseHash,
+            headHash = newest.hash,
+            title = if (orderedHashes.size == 1) {
+                "${newest.hash.take(7)} ${newest.subject}"
+            } else {
+                "${oldest.hash.take(7)}..${newest.hash.take(7)} ${orderedHashes.size} commits"
+            },
+        )
+    }
+
+    fun getChangedFilesForRange(baseRevision: String, headRevision: String): List<ChangedFile> {
+        val repositoryRoot = GitRepositoryResolver(project).resolveRepositoryRoot()
+        return getChangedFilesBetween(repositoryRoot, baseRevision, headRevision)
+    }
+
+    private fun getChangedFilesBetween(repositoryRoot: String, baseRevision: String, headRevision: String): List<ChangedFile> {
+        val git = GitCommandFallback(repositoryRoot)
+        return git.run("diff", "--name-status", baseRevision, headRevision)
             .lineSequence()
             .filter { it.isNotBlank() }
-            .mapNotNull { parseDiffLine(git, parent, metadata.hash, it) }
+            .mapNotNull { parseDiffLine(git, baseRevision, headRevision, it) }
             .sortedBy { it.filePath }
             .toList()
     }
@@ -79,3 +123,16 @@ class CommitChangesProvider(private val project: Project) {
         private const val EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
     }
 }
+
+data class CombinedCommitMetadata(
+    val repositoryRoot: String,
+    val baseHash: String,
+    val headHash: String,
+    val title: String,
+)
+
+private data class CommitPoint(
+    val hash: String,
+    val timestamp: Long,
+    val subject: String,
+)

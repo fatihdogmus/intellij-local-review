@@ -13,9 +13,7 @@ import com.intellij.openapi.project.ProjectManager
 import dev.agentreview.intellij.ReviewManagerService
 import dev.agentreview.intellij.model.AgentMetadata
 import dev.agentreview.intellij.model.CommentAnchor
-import dev.agentreview.intellij.model.CommentSeverity
 import dev.agentreview.intellij.model.CommentStatus
-import dev.agentreview.intellij.model.DiffSide
 import dev.agentreview.intellij.model.Review
 import dev.agentreview.intellij.model.ReviewComment
 import dev.agentreview.intellij.model.ReviewStatus
@@ -35,9 +33,9 @@ class ReviewMcpToolset : McpToolset {
     suspend fun reviewListReviews(
         @McpDescription("Optional review status filter. Example: OPEN")
         status: ReviewStatus? = null,
-    ): ReviewListResult {
+    ): String {
         val manager = manager()
-        return ReviewListResult(manager.listReviews(status).map(::toReviewSummary))
+        return json.encodeToString(ReviewListResult(manager.listReviews(status).map(::toReviewSummary)))
     }
 
     @McpTool(name = "review_get_review")
@@ -51,7 +49,7 @@ class ReviewMcpToolset : McpToolset {
         includeComments: Boolean = true,
         @McpDescription("Include comments with RESOLVED status when includeComments is true")
         includeResolved: Boolean = false,
-    ): ReviewResult {
+    ): String {
         val review = resolveReview(reviewId, selector)
         val comments = if (!includeComments) {
             emptyList()
@@ -63,7 +61,7 @@ class ReviewMcpToolset : McpToolset {
                 .map(::toCommentSummary)
                 .toList()
         }
-        return ReviewResult(toReviewDetails(review, comments))
+        return json.encodeToString(ReviewResult(toReviewDetails(review, comments)))
     }
 
     @McpTool(name = "review_list_unresolved_comments")
@@ -73,7 +71,7 @@ class ReviewMcpToolset : McpToolset {
         reviewId: String? = null,
         @McpDescription("Review selector: current, latest, latest-open, uncommitted, or commit:<hash>")
         selector: String? = "current",
-    ): CommentListResult {
+    ): String {
         val review = resolveReview(reviewId, selector)
         val comments = review.comments
             .asSequence()
@@ -81,7 +79,7 @@ class ReviewMcpToolset : McpToolset {
             .sortedWith(compareBy({ it.filePath }, { it.anchor.newLine ?: it.anchor.oldLine ?: Int.MAX_VALUE }, { it.createdAt }))
             .map(::toCommentSummary)
             .toList()
-        return CommentListResult(comments)
+        return json.encodeToString(CommentListResult(comments))
     }
 
     @McpTool(name = "review_get_comment_context")
@@ -89,14 +87,16 @@ class ReviewMcpToolset : McpToolset {
     suspend fun reviewGetCommentContext(
         @McpDescription("Comment id")
         commentId: String,
-    ): CommentContextResult {
+    ): String {
         val manager = manager()
         val (review, comment) = manager.findCommentWithReview(commentId)
             ?: mcpFail("Comment not found: $commentId")
-        return CommentContextResult(
-            comment = toCommentSummary(comment),
-            anchor = comment.anchor,
-            review = toReviewReference(review),
+        return json.encodeToString(
+            CommentContextResult(
+                comment = toCommentSummary(comment),
+                anchor = toCommentAnchorPayload(comment.anchor),
+                review = toReviewReference(review),
+            ),
         )
     }
 
@@ -111,7 +111,7 @@ class ReviewMcpToolset : McpToolset {
         agentName: String? = null,
         @McpDescription("Optional agent run id")
         runId: String? = null,
-    ): MutationResult {
+    ): String {
         val manager = manager()
         manager.findCommentWithReview(commentId) ?: mcpFail("Comment not found: $commentId")
         manager.markCommentAddressed(
@@ -120,7 +120,7 @@ class ReviewMcpToolset : McpToolset {
             agentName = agentName?.takeIf { it.isNotBlank() } ?: defaultAgentName(),
             runId = runId,
         )
-        return MutationResult(ok = true, commentId = commentId, newStatus = CommentStatus.ADDRESSED.name)
+        return json.encodeToString(MutationResult(ok = true, commentId = commentId, newStatus = CommentStatus.ADDRESSED.name))
     }
 
     @McpTool(name = "review_mark_comment_resolved")
@@ -128,11 +128,13 @@ class ReviewMcpToolset : McpToolset {
     suspend fun reviewMarkCommentResolved(
         @McpDescription("Comment id")
         commentId: String,
-    ): MutationResult {
-        return MutationResult(
-            ok = false,
-            commentId = commentId,
-            error = "Agents are not allowed to mark comments resolved. Mark the comment ADDRESSED instead.",
+    ): String {
+        return json.encodeToString(
+            MutationResult(
+                ok = false,
+                commentId = commentId,
+                error = "Agents are not allowed to mark comments resolved. Mark the comment ADDRESSED instead.",
+            ),
         )
     }
 
@@ -145,7 +147,7 @@ class ReviewMcpToolset : McpToolset {
         selector: String? = "current",
         @McpDescription("Export format: json or markdown")
         format: String = "markdown",
-    ): ExportResult {
+    ): String {
         val manager = manager()
         val review = resolveReview(reviewId, selector)
         val normalizedFormat = format.lowercase()
@@ -154,7 +156,7 @@ class ReviewMcpToolset : McpToolset {
             "markdown" -> manager.buildAgentPrompt(review.id) ?: mcpFail("Review not found: ${review.id}")
             else -> mcpFail("Unsupported export format '$format'. Supported: json, markdown")
         }
-        return ExportResult(format = normalizedFormat, content = content)
+        return json.encodeToString(ExportResult(format = normalizedFormat, content = content))
     }
 
     private suspend fun manager(): ReviewManagerService = ReviewManagerService.getInstance(currentProject())
@@ -257,15 +259,27 @@ class ReviewMcpToolset : McpToolset {
             filePath = comment.filePath,
             line = comment.anchor.newLine ?: comment.anchor.oldLine,
             endLine = comment.anchor.endNewLine ?: comment.anchor.endOldLine,
-            side = comment.anchor.side,
             body = comment.body,
-            severity = comment.severity,
             status = comment.status,
             selectedText = comment.anchor.selectedText,
             createdAt = comment.createdAt,
             updatedAt = comment.updatedAt,
             author = comment.author,
             agentMetadata = comment.agentMetadata,
+        )
+    }
+
+    private fun toCommentAnchorPayload(anchor: CommentAnchor): CommentAnchorPayload {
+        return CommentAnchorPayload(
+            oldLine = anchor.oldLine,
+            newLine = anchor.newLine,
+            endOldLine = anchor.endOldLine,
+            endNewLine = anchor.endNewLine,
+            hunkHeader = anchor.hunkHeader,
+            selectedText = anchor.selectedText,
+            beforeContext = anchor.beforeContext,
+            afterContext = anchor.afterContext,
+            commitHash = anchor.commitHash,
         )
     }
 }
@@ -318,9 +332,7 @@ data class CommentSummary(
     val filePath: String,
     val line: Int?,
     val endLine: Int?,
-    val side: DiffSide,
     val body: String,
-    val severity: CommentSeverity,
     val status: CommentStatus,
     val selectedText: String?,
     val createdAt: String,
@@ -332,8 +344,21 @@ data class CommentSummary(
 @Serializable
 data class CommentContextResult(
     val comment: CommentSummary,
-    val anchor: CommentAnchor,
+    val anchor: CommentAnchorPayload,
     val review: ReviewReference,
+)
+
+@Serializable
+data class CommentAnchorPayload(
+    val oldLine: Int?,
+    val newLine: Int?,
+    val endOldLine: Int?,
+    val endNewLine: Int?,
+    val hunkHeader: String?,
+    val selectedText: String?,
+    val beforeContext: List<String>,
+    val afterContext: List<String>,
+    val commitHash: String?,
 )
 
 @Serializable

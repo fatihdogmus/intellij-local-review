@@ -11,7 +11,6 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.util.containers.ContainerUtil
 import com.intellij.vcs.log.VcsLogCommitSelection
 import com.intellij.vcs.log.VcsLogDataKeys
-import dev.agentreview.intellij.editor.ReviewPageManager
 import dev.agentreview.intellij.ReviewManagerService
 import dev.agentreview.intellij.diff.REVIEW_DIFF_EDITOR_KEY
 import dev.agentreview.intellij.export.ExportUiSupport
@@ -21,9 +20,7 @@ import dev.agentreview.intellij.ui.showInlineCommentForm
 class StartUncommittedReviewAction : DumbAwareAction() {
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
-        backgroundReviewTask(project, "Creating uncommitted review") {
-            ReviewManagerService.getInstance(project).createUncommittedReview()
-        }
+        ReviewManagerService.getInstance(project).openDefaultReview()
     }
 }
 
@@ -34,9 +31,9 @@ class StartReviewFromCommitHashAction : DumbAwareAction() {
         if (!dialog.showAndGet()) return
         val commitHashes = dialog.commitHashes()
         if (commitHashes.isEmpty()) return
-        backgroundReviewTask(project, if (commitHashes.size == 1) "Creating commit review" else "Creating commit reviews") {
+        backgroundReviewTask(project, if (commitHashes.size == 1) "Creating commit review" else "Creating combined commit review") {
             val manager = ReviewManagerService.getInstance(project)
-            commitHashes.forEach(manager::createCommitReview)
+            manager.createCommitRangeReview(commitHashes)
         }
     }
 }
@@ -49,7 +46,7 @@ class StartReviewFromGitLogAction : DumbAwareAction() {
         val selection = event.getData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION) ?: return
         backgroundReviewTask(project, "Creating review from Git Log") {
             val manager = ReviewManagerService.getInstance(project)
-            selectedCommitHashes(selection).forEach(manager::createCommitReview)
+            manager.createCommitRangeReview(selectedCommitHashes(selection))
         }
     }
 
@@ -107,7 +104,7 @@ class CopyAgentPromptAction : DumbAwareAction() {
         val project = event.project ?: return
         val manager = ReviewManagerService.getInstance(project)
         val review = manager.getCurrentReview() ?: return
-        manager.buildAgentPrompt(review.id)?.let(ExportUiSupport::copyToClipboard)
+        manager.buildAgentPrompt(review.id)?.let { ExportUiSupport.copyToClipboard(project, it) }
     }
 
     override fun update(event: AnActionEvent) {
@@ -119,7 +116,7 @@ class CopyAgentPromptAction : DumbAwareAction() {
 class OpenReviewDialogAction : DumbAwareAction() {
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
-        ReviewPageManager.getInstance(project).open()
+        ReviewManagerService.getInstance(project).openDefaultReview()
     }
 }
 

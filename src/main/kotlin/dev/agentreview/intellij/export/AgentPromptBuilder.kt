@@ -23,10 +23,7 @@ class AgentPromptBuilder {
         appendLine("## Review")
         appendLine("- Title: ${review.title}")
         appendLine("- Review ID: ${review.id}")
-        appendLine("- Status: ${review.status}")
         appendLine("- Repository Root: `${review.repositoryRoot}`")
-        appendLine("- Created At: ${review.createdAt}")
-        appendLine("- Updated At: ${review.updatedAt}")
         appendLine("- Target Type: ${review.target.type}")
         review.target.baseRef?.let { appendLine("- Base Ref: `$it`") }
         review.target.headRef?.let { appendLine("- Head Ref: `$it`") }
@@ -49,39 +46,10 @@ class AgentPromptBuilder {
 
     private fun StringBuilder.appendCommentBlock(index: Int, comment: ReviewComment) {
         appendLine("### Comment $index")
-        appendLine("- Comment ID: ${comment.id}")
         appendLine("- File: `${comment.filePath}`")
-        appendLine("- Status: ${comment.status}")
-        appendLine("- Severity: ${comment.severity}")
-        appendLine("- Side: ${comment.anchor.side}")
         appendLine("- Lines: ${comment.anchor.lineLabel()}")
-        comment.anchor.commitHash?.let { appendLine("- Anchor Commit: `$it`") }
-        comment.author?.let { appendLine("- Author: ${it}") }
-        appendLine("- Created At: ${comment.createdAt}")
-        appendLine("- Updated At: ${comment.updatedAt}")
-        appendLine()
-        appendLine("**Comment**")
+        appendLine("- Comment:")
         appendLine(comment.body)
-        appendLine()
-
-        comment.anchor.selectedText?.takeIf { it.isNotBlank() }?.let {
-            appendLine("**Selected Text**")
-            appendCodeBlock(it)
-        }
-        if (comment.anchor.beforeContext.isNotEmpty()) {
-            appendLine("**Before Context**")
-            appendCodeBlock(comment.anchor.beforeContext.joinToString("\n"))
-        }
-        if (comment.anchor.afterContext.isNotEmpty()) {
-            appendLine("**After Context**")
-            appendCodeBlock(comment.anchor.afterContext.joinToString("\n"))
-        }
-    }
-
-    private fun StringBuilder.appendCodeBlock(content: String) {
-        appendLine("```text")
-        appendLine(content.replace("```", "'''"))
-        appendLine("```")
         appendLine()
     }
 }

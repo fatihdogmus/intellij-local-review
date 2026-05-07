@@ -1,5 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.gradle.api.tasks.testing.Test
+import org.gradle.api.tasks.JavaExec
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -37,4 +38,8 @@ tasks.withType<Test>().configureEach {
         "--add-opens=java.desktop/javax.swing=ALL-UNNAMED",
         "--add-opens=java.base/java.lang=ALL-UNNAMED",
     )
+}
+
+tasks.named<JavaExec>("runIde") {
+    jvmArgs("-Dlocal.review.enable.mcp.by.default=true")
 }

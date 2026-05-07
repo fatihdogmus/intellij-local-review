@@ -15,7 +15,9 @@
     <extensions defaultExtensionNs="com.intellij">
         <diff.DiffExtension implementation="dev.agentreview.intellij.diff.ReviewDiffExtension"/>
         <fileEditorProvider implementation="dev.agentreview.intellij.editor.ReviewPageEditorProvider"/>
+        <postStartupActivity implementation="dev.agentreview.intellij.EnableMcpServerOnStartupActivity"/>
         <mcpServer.mcpToolset implementation="dev.agentreview.intellij.mcp.ReviewMcpToolset"/>
+        <notificationGroup id="Local Review" displayType="BALLOON" isLogByDefault="false"/>
         <toolWindow id="Review" anchor="left" secondary="true" factoryClass="dev.agentreview.intellij.ReviewStripeToolWindowFactory"/>
     </extensions>
 

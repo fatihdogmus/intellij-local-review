@@ -39,7 +39,6 @@ data class ReviewComment(
     var filePath: String = "",
     var anchor: CommentAnchor = CommentAnchor(),
     var body: String = "",
-    var severity: CommentSeverity = CommentSeverity.MUST_FIX,
     var status: CommentStatus = CommentStatus.OPEN,
     var createdAt: String = "",
     var updatedAt: String = "",
@@ -80,12 +79,6 @@ enum class CommentStatus {
     ADDRESSED,
     RESOLVED,
     WONT_FIX,
-}
-
-@Serializable
-enum class CommentSeverity {
-    NOTE,
-    MUST_FIX,
 }
 
 @Serializable

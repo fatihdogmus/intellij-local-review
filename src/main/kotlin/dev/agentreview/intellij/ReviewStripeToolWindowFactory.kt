@@ -7,7 +7,6 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener
-import dev.agentreview.intellij.editor.ReviewPageManager
 import javax.swing.Icon
 import javax.swing.JPanel
 
@@ -31,7 +30,7 @@ class ReviewStripeToolWindowFactory : ToolWindowFactory, DumbAware {
 
     private fun openReviewAndHide(project: Project, toolWindow: ToolWindow) {
         ToolWindowManager.getInstance(project).invokeLater {
-            ReviewPageManager.getInstance(project).open()
+            ReviewManagerService.getInstance(project).openDefaultReview()
             if (toolWindow.isVisible) {
                 toolWindow.hide()
             }

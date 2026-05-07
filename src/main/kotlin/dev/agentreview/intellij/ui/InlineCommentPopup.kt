@@ -284,7 +284,7 @@ private class ExistingCommentPanel(
             addActionListener {
                 val updatedBody = body.text.trim()
                 if (updatedBody.isNotEmpty()) {
-                    ReviewManagerService.getInstance(project).updateComment(comment.id, updatedBody, comment.severity, comment.status)
+                    ReviewManagerService.getInstance(project).updateComment(comment.id, updatedBody, comment.status)
                     body.text = comment.body
                 }
                 exitEditMode()
