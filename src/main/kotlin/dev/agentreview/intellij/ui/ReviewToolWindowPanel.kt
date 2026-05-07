@@ -16,7 +16,10 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.psi.PsiManager
+import com.intellij.ide.util.DeleteHandler
 import com.intellij.ui.JBSplitter
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBPanel
@@ -38,6 +41,7 @@ import java.awt.FlowLayout
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
+import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.JButton
 import javax.swing.JComboBox
@@ -87,6 +91,9 @@ class ReviewToolWindowPanel(
         }
         changedFilesPanel.onOpenRequested = { changedFile ->
             openChangedFile(changedFile)
+        }
+        changedFilesPanel.onDeleteRequested = { changedFile ->
+            deleteChangedFile(changedFile)
         }
 
         refreshUi()
@@ -141,6 +148,13 @@ class ReviewToolWindowPanel(
         } else {
             diffPanel.showDiff(diffRequestBuilder.buildForFile(reviewId, changedFile))
         }
+    }
+
+    private fun deleteChangedFile(changedFile: ChangedFile) {
+        val review = manager.getCurrentReview() ?: return
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(Path.of(review.repositoryRoot, changedFile.filePath)) ?: return
+        val psiFile = PsiManager.getInstance(project).findFile(virtualFile) ?: return
+        DeleteHandler.deletePsiElement(arrayOf(psiFile), project)
     }
 
     private fun loadChangedFilesIfNeeded(review: Review) {

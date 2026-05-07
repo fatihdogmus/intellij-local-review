@@ -2,6 +2,9 @@ package dev.agentreview.intellij.ui
 
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.progress.DumbProgressIndicator
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.IdeActions
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.diff.comparison.ComparisonManager
 import com.intellij.diff.comparison.ComparisonPolicy
 import dev.agentreview.intellij.vcs.ChangedFileStatus
@@ -36,6 +39,7 @@ class ChangedFilesPanel {
 
     var onSelectionChanged: ((ChangedFile?) -> Unit)? = null
     var onOpenRequested: ((ChangedFile) -> Unit)? = null
+    var onDeleteRequested: ((ChangedFile) -> Unit)? = null
 
     init {
         list.cellRenderer = ChangedFileCellRenderer { changedFile -> commentCountsByPath[changedFile.filePath] ?: FileCommentCounts() }
@@ -45,6 +49,7 @@ class ChangedFilesPanel {
         list.border = JBUI.Borders.empty(8, 10)
         list.addListSelectionListener {
             if (!it.valueIsAdjusting && !updatingModel) {
+                list.requestFocusInWindow()
                 onSelectionChanged?.invoke(list.selectedValue)
             }
         }
@@ -53,11 +58,17 @@ class ChangedFilesPanel {
                 list.requestFocusInWindow()
             }
             override fun mouseClicked(e: MouseEvent) {
+                list.requestFocusInWindow()
                 if (e.clickCount == 2) {
                     list.selectedValue?.takeIf { it.status != ChangedFileStatus.DELETED }?.let { onOpenRequested?.invoke(it) }
                 }
             }
         })
+        object : DumbAwareAction() {
+            override fun actionPerformed(e: com.intellij.openapi.actionSystem.AnActionEvent) {
+                list.selectedValue?.takeIf { it.status != ChangedFileStatus.DELETED }?.let { onDeleteRequested?.invoke(it) }
+            }
+        }.registerCustomShortcutSet(ActionManager.getInstance().getAction(IdeActions.ACTION_DELETE).shortcutSet, component)
         component.preferredSize = Dimension(JBUI.scale(280), JBUI.scale(260))
         component.minimumSize = Dimension(JBUI.scale(220), JBUI.scale(180))
         component.background = list.background
