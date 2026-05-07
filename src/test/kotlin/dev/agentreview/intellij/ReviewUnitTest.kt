@@ -1,0 +1,102 @@
+package dev.agentreview.intellij
+
+import dev.agentreview.intellij.diff.DiffContextExtractor
+import dev.agentreview.intellij.export.AgentPromptBuilder
+import dev.agentreview.intellij.model.CommentAnchor
+import dev.agentreview.intellij.model.CommentSeverity
+import dev.agentreview.intellij.model.CommentStatus
+import dev.agentreview.intellij.model.DiffSide
+import dev.agentreview.intellij.model.Review
+import dev.agentreview.intellij.model.ReviewComment
+import dev.agentreview.intellij.model.ReviewStatus
+import dev.agentreview.intellij.model.ReviewTarget
+import dev.agentreview.intellij.model.ReviewTargetType
+import dev.agentreview.intellij.vcs.ChangedFile
+import dev.agentreview.intellij.vcs.ChangedFileStatus
+import dev.agentreview.intellij.vcs.ReviewContent
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class ReviewUnitTest {
+    @Test
+    fun promptBuilderIncludesDefaultsAndCommentPayload() {
+        val exported = AgentPromptBuilder().build(sampleReview())
+
+        assertTrue(exported.contains("### Comment 1"))
+        assertTrue(exported.contains("- Severity: MUST_FIX"))
+        assertTrue(exported.contains("**Selected Text**"))
+    }
+
+    @Test
+    fun promptBuilderIncludesEscapedTextAndMetadata() {
+        val review = sampleReview().copy(comments = mutableListOf(sampleReview().comments.first().copy(body = "Use <safe> & clear")))
+
+        val exported = AgentPromptBuilder().build(review)
+
+        assertTrue(exported.contains("Use <safe> & clear"))
+        assertTrue(exported.contains("- Status: OPEN"))
+        assertTrue(exported.contains("- Repository Root: `/tmp/repo`"))
+    }
+
+    @Test
+    fun diffContextExtractorBuildsMultiLineAnchorWithoutSelectedLinesInAfterContext() {
+        val anchor = DiffContextExtractor().buildAnchor(
+            changedFile = ChangedFile(
+                filePath = "src/Foo.kt",
+                status = ChangedFileStatus.MODIFIED,
+                beforeContent = null,
+                afterContent = ReviewContent(
+                    text = "one\ntwo\nthree\nfour\nfive",
+                    revisionTitle = "after",
+                    filePath = "src/Foo.kt",
+                ),
+            ),
+            side = DiffSide.RIGHT,
+            lineNumber = 2,
+            commitHash = "abc123",
+            endLineNumber = 4,
+        )
+
+        assertEquals(2, anchor.newLine)
+        assertEquals(4, anchor.endNewLine)
+        assertEquals("two\nthree\nfour", anchor.selectedText)
+        assertEquals(listOf("one"), anchor.beforeContext)
+        assertEquals(listOf("five"), anchor.afterContext)
+    }
+
+    private fun sampleReview(): Review = Review(
+        id = "review-unit-1",
+        title = "Review abc123",
+        target = ReviewTarget(
+            type = ReviewTargetType.COMMIT,
+            commitHash = "abc123def456",
+            parentHash = "def456abc123",
+            subject = "Fix user lookup",
+        ),
+        repositoryRoot = "/tmp/repo",
+        createdAt = "2026-05-07T14:20:00+03:00",
+        updatedAt = "2026-05-07T14:31:00+03:00",
+        status = ReviewStatus.OPEN,
+        comments = mutableListOf(
+            ReviewComment(
+                id = "comment-1",
+                reviewId = "review-unit-1",
+                filePath = "src/main/kotlin/Foo.kt",
+                anchor = CommentAnchor(
+                    side = DiffSide.RIGHT,
+                    newLine = 47,
+                    selectedText = "repo.find(id)!!",
+                    beforeContext = listOf("fun findUser(id: UserId): User {"),
+                    afterContext = listOf("}"),
+                    commitHash = "abc123def456",
+                ),
+                body = "Avoid !! here.",
+                severity = CommentSeverity.MUST_FIX,
+                status = CommentStatus.OPEN,
+                createdAt = "2026-05-07T14:20:00+03:00",
+                updatedAt = "2026-05-07T14:20:00+03:00",
+            ),
+        ),
+    )
+}

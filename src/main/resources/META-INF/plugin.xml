@@ -1,19 +1,52 @@
-<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <id>com.github.fatihdogmus.intellijlocalreview</id>
-    <name>intellij-local-review</name>
-    <vendor>fatihdogmus</vendor>
+    <id>dev.agentreview.intellij</id>
+    <name>Local Review</name>
+    <vendor>Internal</vendor>
     <description><![CDATA[
-        <p><b>intellij-local-review</b> is a repository that provides a pure template to make it easier to create a new plugin project.</p>
-        <p>The main goal of this template is to speed up the setup phase of plugin development for both new and experienced developers by preconfiguring the project scaffold and CI, linking to the proper documentation pages, and keeping everything organized.</p>
+        <p>Local PR-like review workflow for IntelliJ IDEA.</p>
+        <p>Review diffs, add persistent comments, export review data, and hand unresolved comments to coding agents.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
-
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <depends>com.intellij.modules.vcs</depends>
+    <depends>Git4Idea</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.fatihdogmus.intellijlocalreview.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.fatihdogmus.intellijlocalreview.startup.MyProjectActivity" />
+        <toolWindow
+            id="Review"
+            anchor="left"
+            factoryClass="dev.agentreview.intellij.ReviewToolWindowFactory"
+            icon="/icons/review.svg"/>
+        <diff.DiffExtension implementation="dev.agentreview.intellij.diff.ReviewDiffExtension"/>
     </extensions>
+
+    <actions>
+        <group id="LocalReview.Actions" text="Local Review" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action
+                id="LocalReview.StartUncommittedReview"
+                class="dev.agentreview.intellij.actions.StartUncommittedReviewAction"
+                text="Start Review of Uncommitted Changes"/>
+            <action
+                id="LocalReview.StartReviewFromGitLog"
+                class="dev.agentreview.intellij.actions.StartReviewFromGitLogAction"
+                text="Start Review from Selected Commit(s)">
+                <add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
+            </action>
+            <action
+                id="LocalReview.StartReviewFromCommitHash"
+                class="dev.agentreview.intellij.actions.StartReviewFromCommitHashAction"
+                text="Start Review from Commit Picker..."/>
+            <action
+                id="LocalReview.AddComment"
+                class="dev.agentreview.intellij.actions.AddReviewCommentAction"
+                text="Add Review Comment">
+                <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
+            </action>
+            <action
+                id="LocalReview.CopyAgentPrompt"
+                class="dev.agentreview.intellij.actions.CopyAgentPromptAction"
+                text="Copy Prompt"/>
+        </group>
+    </actions>
 </idea-plugin>
