@@ -2,14 +2,14 @@ package dev.agentreview.intellij
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.agentreview.intellij.model.CommentAnchor
-import dev.agentreview.intellij.model.CommentStatus
-import dev.agentreview.intellij.model.DiffSide
-import dev.agentreview.intellij.model.ReviewComment
-import dev.agentreview.intellij.model.ReviewStatus
-import dev.agentreview.intellij.model.ReviewTargetType
-import dev.agentreview.intellij.persistence.SavedReviewArchive
-import kotlinx.serialization.encodeToString
+import dev.fatihdogmus.localreview.ReviewManagerService
+import dev.fatihdogmus.localreview.model.CommentAnchor
+import dev.fatihdogmus.localreview.model.CommentStatus
+import dev.fatihdogmus.localreview.model.DiffSide
+import dev.fatihdogmus.localreview.model.ReviewComment
+import dev.fatihdogmus.localreview.model.ReviewStatus
+import dev.fatihdogmus.localreview.model.ReviewTargetType
+import dev.fatihdogmus.localreview.persistence.SavedReviewArchive
 import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test

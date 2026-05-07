@@ -2,16 +2,16 @@ package dev.agentreview.intellij
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.agentreview.intellij.export.AgentPromptBuilder
-import dev.agentreview.intellij.model.CommentAnchor
-import dev.agentreview.intellij.model.CommentStatus
-import dev.agentreview.intellij.model.DiffSide
-import dev.agentreview.intellij.model.Review
-import dev.agentreview.intellij.model.ReviewComment
-import dev.agentreview.intellij.model.ReviewStatus
-import dev.agentreview.intellij.model.ReviewTarget
-import dev.agentreview.intellij.model.ReviewTargetType
-import dev.agentreview.intellij.persistence.ReviewStateService
+import dev.fatihdogmus.localreview.export.AgentPromptBuilder
+import dev.fatihdogmus.localreview.model.CommentAnchor
+import dev.fatihdogmus.localreview.model.CommentStatus
+import dev.fatihdogmus.localreview.model.DiffSide
+import dev.fatihdogmus.localreview.model.Review
+import dev.fatihdogmus.localreview.model.ReviewComment
+import dev.fatihdogmus.localreview.model.ReviewStatus
+import dev.fatihdogmus.localreview.model.ReviewTarget
+import dev.fatihdogmus.localreview.model.ReviewTargetType
+import dev.fatihdogmus.localreview.persistence.ReviewStateService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 

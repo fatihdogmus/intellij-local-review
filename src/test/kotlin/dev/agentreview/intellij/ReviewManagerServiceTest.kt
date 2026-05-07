@@ -2,16 +2,19 @@ package dev.agentreview.intellij
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.agentreview.intellij.model.CommentStatus
-import dev.agentreview.intellij.model.DiffSide
-import dev.agentreview.intellij.model.Review
-import dev.agentreview.intellij.model.ReviewTarget
-import dev.agentreview.intellij.model.ReviewTargetType
-import dev.agentreview.intellij.persistence.ReviewStateService
-import dev.agentreview.intellij.vcs.BranchReviewMetadata
-import dev.agentreview.intellij.vcs.ChangedFile
-import dev.agentreview.intellij.vcs.ChangedFileStatus
-import dev.agentreview.intellij.vcs.ReviewContent
+import dev.fatihdogmus.localreview.model.CommentStatus
+import dev.fatihdogmus.localreview.model.DiffSide
+import dev.fatihdogmus.localreview.model.Review
+import dev.fatihdogmus.localreview.model.ReviewTarget
+import dev.fatihdogmus.localreview.model.ReviewTargetType
+import dev.fatihdogmus.localreview.persistence.ReviewStateService
+import dev.fatihdogmus.localreview.vcs.BranchReviewMetadata
+import dev.fatihdogmus.localreview.vcs.ChangedFile
+import dev.fatihdogmus.localreview.vcs.ChangedFileStatus
+import dev.fatihdogmus.localreview.vcs.ReviewContent
+import dev.fatihdogmus.localreview.ReviewManagerService
+import dev.fatihdogmus.localreview.model.CommentAnchor
+import dev.fatihdogmus.localreview.model.ReviewComment
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -68,31 +71,31 @@ class ReviewManagerServiceTest {
     fun commentsForFileReturnsOnlyOpenComments() {
         val manager = ReviewManagerService.getInstance(project)
         val review = seededReview("open-only-comments")
-        review.comments += dev.agentreview.intellij.model.ReviewComment(
+        review.comments += ReviewComment(
             id = "open-comment",
             reviewId = review.id,
             filePath = "src/Foo.kt",
-            anchor = dev.agentreview.intellij.model.CommentAnchor(newLine = 1),
+            anchor = CommentAnchor(newLine = 1),
             body = "open",
             status = CommentStatus.OPEN,
             createdAt = "2026-05-07T14:20:00+03:00",
             updatedAt = "2026-05-07T14:20:00+03:00",
         )
-        review.comments += dev.agentreview.intellij.model.ReviewComment(
+        review.comments += ReviewComment(
             id = "resolved-comment",
             reviewId = review.id,
             filePath = "src/Foo.kt",
-            anchor = dev.agentreview.intellij.model.CommentAnchor(newLine = 2),
+            anchor = CommentAnchor(newLine = 2),
             body = "resolved",
             status = CommentStatus.RESOLVED,
             createdAt = "2026-05-07T14:20:00+03:00",
             updatedAt = "2026-05-07T14:20:00+03:00",
         )
-        review.comments += dev.agentreview.intellij.model.ReviewComment(
+        review.comments += ReviewComment(
             id = "addressed-comment",
             reviewId = review.id,
             filePath = "src/Foo.kt",
-            anchor = dev.agentreview.intellij.model.CommentAnchor(newLine = 3),
+            anchor = CommentAnchor(newLine = 3),
             body = "resolved-too",
             status = CommentStatus.RESOLVED,
             createdAt = "2026-05-07T14:20:00+03:00",
@@ -201,11 +204,11 @@ class ReviewManagerServiceTest {
         manager.currentHeadHashSupplier = { "head-1" }
         manager.openDefaultReview()
         val review = manager.getCurrentReview()!!
-        ReviewStateService.getInstance(project).findReview(review.id)!!.comments += dev.agentreview.intellij.model.ReviewComment(
+        ReviewStateService.getInstance(project).findReview(review.id)!!.comments += ReviewComment(
             id = "comment-1",
             reviewId = review.id,
             filePath = "src/Foo.kt",
-            anchor = dev.agentreview.intellij.model.CommentAnchor(newLine = 1),
+            anchor = CommentAnchor(newLine = 1),
             body = "stale",
             createdAt = "2026-05-07T14:20:00+03:00",
             updatedAt = "2026-05-07T14:20:00+03:00",
@@ -226,11 +229,11 @@ class ReviewManagerServiceTest {
         manager.currentHeadHashSupplier = { "head-1" }
         manager.openDefaultReview()
         val review = manager.getCurrentReview()!!
-        ReviewStateService.getInstance(project).findReview(review.id)!!.comments += dev.agentreview.intellij.model.ReviewComment(
+        ReviewStateService.getInstance(project).findReview(review.id)!!.comments += ReviewComment(
             id = "comment-1",
             reviewId = review.id,
             filePath = "src/Foo.kt",
-            anchor = dev.agentreview.intellij.model.CommentAnchor(newLine = 1),
+            anchor = CommentAnchor(newLine = 1),
             body = "stale after commit",
             createdAt = "2026-05-07T14:20:00+03:00",
             updatedAt = "2026-05-07T14:20:00+03:00",

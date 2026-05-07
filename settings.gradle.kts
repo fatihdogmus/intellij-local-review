@@ -1,6 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.extensions.intellijPlatform
 
-rootProject.name = "local-review"
+rootProject.name = "Local Review"
 
 pluginManagement {
     plugins {
