@@ -1,11 +1,18 @@
 package dev.agentreview.intellij.ui
 
 import com.intellij.diff.requests.MessageDiffRequest
+import com.intellij.icons.AllIcons
+import com.intellij.ide.DataManager
+import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.JBSplitter
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBPanel
@@ -33,6 +40,7 @@ import javax.swing.JComponent
 import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.ListCellRenderer
+import javax.swing.SwingConstants
 import javax.swing.UIManager
 
 class ReviewToolWindowPanel(
@@ -46,6 +54,7 @@ class ReviewToolWindowPanel(
     private val changedFilesPanel = ChangedFilesPanel()
     private val contentPanel = JPanel(BorderLayout())
     private val reviewSelector = JComboBox<Review>()
+    private val createReviewButton = RoundedToolbarButton("Create Review")
     private val deleteReviewButton = RoundedToolbarButton("Delete")
     private var updatingReviewSelector = false
     private val stateListener: () -> Unit = { refreshUi() }
@@ -64,11 +73,10 @@ class ReviewToolWindowPanel(
                 manager.selectReview((reviewSelector.selectedItem as? Review)?.id)
             }
         }
+        createReviewButton.applyCreateReviewStyle().addActionListener { showCreateReviewMenu() }
         deleteReviewButton.addActionListener {
             val review = (reviewSelector.selectedItem as? Review) ?: manager.getCurrentReview() ?: return@addActionListener
-            if (manager.confirmDelete(review)) {
-                manager.deleteReview(review.id)
-            }
+            manager.deleteReview(review.id)
         }
 
         changedFilesPanel.onSelectionChanged = { changedFile ->
@@ -181,7 +189,7 @@ class ReviewToolWindowPanel(
 
         val primaryActions = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
             isOpaque = false
-            add(RoundedToolbarButton("Select Commit").applyToolbarActionStyle().apply { addActionListener { startCommitReview() } })
+            add(createReviewButton)
             add(RoundedToolbarButton("Copy Prompt").applyToolbarActionStyle().apply { addActionListener { copyPrompt() } })
         }
 
@@ -205,10 +213,43 @@ class ReviewToolWindowPanel(
             reviews.forEach(reviewSelector::addItem)
             val selected = reviews.firstOrNull { it.id == manager.currentReviewId }
             reviewSelector.selectedItem = selected
+            createReviewButton.isEnabled = true
             deleteReviewButton.isEnabled = selected?.target?.type != ReviewTargetType.UNCOMMITTED
         } finally {
             updatingReviewSelector = false
         }
+    }
+
+    private fun showCreateReviewMenu() {
+        val group = DefaultActionGroup().apply {
+            add(object : DumbAwareAction("Select Commit") {
+                override fun actionPerformed(event: AnActionEvent) {
+                    startCommitReview()
+                }
+            })
+            add(object : DumbAwareAction("Branch Review") {
+                override fun actionPerformed(event: AnActionEvent) {
+                    startBranchReview()
+                }
+
+                override fun update(event: AnActionEvent) {
+                    event.presentation.isEnabled = manager.canCreateBranchReview()
+                }
+            })
+        }
+        JBPopupFactory.getInstance()
+            .createActionGroupPopup(
+                null,
+                group,
+                DataManager.getInstance().getDataContext(createReviewButton),
+                JBPopupFactory.ActionSelectionAid.SPEEDSEARCH,
+                true,
+                null,
+                -1,
+                null,
+                ActionPlaces.POPUP,
+            )
+            .showUnderneathOf(createReviewButton)
     }
 
     private fun startCommitReview() {
@@ -218,6 +259,12 @@ class ReviewToolWindowPanel(
         if (commitHashes.isEmpty()) return
         runReviewCreationTask(if (commitHashes.size == 1) "Creating commit review" else "Creating combined commit review") {
             manager.createCommitRangeReview(commitHashes)
+        }
+    }
+
+    private fun startBranchReview() {
+        runReviewCreationTask("Creating branch review") {
+            manager.createBranchReview()
         }
     }
 
@@ -273,6 +320,19 @@ private fun JButton.applyToolbarActionStyle(): JButton = apply {
     isContentAreaFilled = false
     isFocusPainted = false
     putClientProperty(ROUNDED_BUTTON_BORDER_COLOR, JBColor(Color(0xB8CAE6), Color(0x4C5A70)))
+}
+
+private fun JButton.applyCreateReviewStyle(): JButton = apply {
+    background = JBColor(Color(0x2E, 0xA4, 0x4F), Color(0x2E, 0xA4, 0x4F))
+    foreground = JBColor(Color.WHITE, Color.WHITE)
+    icon = AllIcons.General.ArrowDown
+    horizontalTextPosition = SwingConstants.LEFT
+    iconTextGap = JBUI.scale(8)
+    border = JBUI.Borders.empty(8, 16)
+    isOpaque = false
+    isContentAreaFilled = false
+    isFocusPainted = false
+    putClientProperty(ROUNDED_BUTTON_BORDER_COLOR, JBColor(Color(0x22, 0x83, 0x3E), Color(0x22, 0x83, 0x3E)))
 }
 
 private fun JButton.applyDestructiveStyle(): JButton = apply {

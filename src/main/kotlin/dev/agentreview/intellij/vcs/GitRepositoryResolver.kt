@@ -1,10 +1,14 @@
 package dev.agentreview.intellij.vcs
 
 import com.intellij.openapi.project.Project
+import git4idea.repo.GitRepositoryManager
 
 class GitRepositoryResolver(private val project: Project) {
     fun resolveRepositoryRoot(): String {
-        val basePath = project.basePath ?: error("Project base path missing")
-        return GitCommandFallback(basePath).run("rev-parse", "--show-toplevel").trim()
+        val repository = GitRepositoryManager.getInstance(project).repositories.firstOrNull()
+        if (repository != null) {
+            return repository.root.path
+        }
+        return project.basePath ?: error("Project base path missing")
     }
 }

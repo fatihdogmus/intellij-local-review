@@ -3,7 +3,6 @@ package dev.agentreview.intellij
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.ChangeListListener
 import dev.agentreview.intellij.editor.ReviewPageManager
@@ -21,6 +20,7 @@ import dev.agentreview.intellij.model.commitHashIfAny
 import dev.agentreview.intellij.persistence.ReviewStateService
 import dev.agentreview.intellij.util.nowIso
 import dev.agentreview.intellij.vcs.ChangedFile
+import dev.agentreview.intellij.vcs.BranchReviewMetadata
 import dev.agentreview.intellij.vcs.CommitChangesProvider
 import dev.agentreview.intellij.vcs.GitRepositoryResolver
 import dev.agentreview.intellij.vcs.UncommittedChangesProvider
@@ -33,6 +33,8 @@ class ReviewManagerService(private val project: Project) {
     private val listeners = mutableSetOf<() -> Unit>()
     internal var uncommittedChangesLoader: () -> List<ChangedFile> = { UncommittedChangesProvider(project).getChangedFiles() }
     internal var repositoryRootResolver: () -> String = { GitRepositoryResolver(project).resolveRepositoryRoot() }
+    internal var canCreateBranchReviewSupplier: () -> Boolean = { CommitChangesProvider(project).canCreateCurrentBranchReview() }
+    internal var branchReviewMetadataProvider: () -> BranchReviewMetadata? = { CommitChangesProvider(project).getCurrentBranchReviewMetadataOrNull() }
     internal var hasUncommittedChangesSupplier: () -> Boolean = {
         val changeListManager = ChangeListManager.getInstance(project)
         changeListManager.getAllChanges().isNotEmpty() || changeListManager.unversionedFilesPaths.isNotEmpty()
@@ -50,7 +52,7 @@ class ReviewManagerService(private val project: Project) {
                 syncUncommittedReviewState()
             }
         })
-        syncUncommittedReviewState(notify = false)
+        ensureUncommittedReview()
     }
 
     fun listReviews(status: ReviewStatus? = null): List<Review> = stateService.reviews()
@@ -138,6 +140,28 @@ class ReviewManagerService(private val project: Project) {
                 type = ReviewTargetType.COMMIT_RANGE,
                 baseRef = metadata.baseHash,
                 headRef = metadata.headHash,
+            ),
+            repositoryRoot = metadata.repositoryRoot,
+            createdAt = nowIso(),
+            updatedAt = nowIso(),
+        )
+        stateService.addReview(review)
+        openReview(review.id)
+        return review
+    }
+
+    fun canCreateBranchReview(): Boolean = canCreateBranchReviewSupplier()
+
+    fun createBranchReview(): Review {
+        val metadata = branchReviewMetadataProvider() ?: error("Branch review unavailable")
+        val review = Review(
+            id = UUID.randomUUID().toString(),
+            title = metadata.title,
+            target = ReviewTarget(
+                type = ReviewTargetType.COMMIT_RANGE,
+                baseRef = metadata.mergeBase,
+                headRef = metadata.headHash,
+                subject = "${metadata.currentBranch} vs ${metadata.baseBranch}",
             ),
             repositoryRoot = metadata.repositoryRoot,
             createdAt = nowIso(),
@@ -237,16 +261,6 @@ class ReviewManagerService(private val project: Project) {
 
     fun buildAgentPrompt(reviewId: String): String? = findReview(reviewId)?.let { AgentPromptBuilder().build(it) }
 
-    fun confirmDelete(review: Review): Boolean {
-        if (review.target.type == ReviewTargetType.UNCOMMITTED) return false
-        return Messages.showYesNoDialog(
-            project,
-            "Delete review '${review.title}'? Comments will be removed too.",
-            "Delete Review",
-            Messages.getQuestionIcon(),
-        ) == Messages.YES
-    }
-
     fun addListener(listener: () -> Unit) {
         listeners.add(listener)
     }
@@ -281,8 +295,19 @@ class ReviewManagerService(private val project: Project) {
         val uncommittedReviews = stateService.reviews().filter { it.target.type == ReviewTargetType.UNCOMMITTED }
         val keepReview = uncommittedReviews.maxByOrNull { it.updatedAt } ?: createNewUncommittedReview()
         val removedIds = uncommittedReviews.filter { it.id != keepReview.id }.map { it.id }
+        val hasChanges = hasUncommittedChanges()
+        val clearedComments = if (!hasChanges && keepReview.comments.isNotEmpty()) {
+            keepReview.comments.clear()
+            keepReview.updatedAt = nowIso()
+            true
+        } else {
+            false
+        }
         val shouldSelectUncommitted = currentReviewId == null
-        if (removedIds.isEmpty() && !shouldSelectUncommitted) return false
+        if (!hasChanges && currentReviewId == keepReview.id) {
+            currentFilePath = null
+        }
+        if (removedIds.isEmpty() && !shouldSelectUncommitted && !clearedComments) return false
 
         removedIds.forEach(stateService::removeReview)
 

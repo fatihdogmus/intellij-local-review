@@ -1,8 +1,41 @@
 package dev.agentreview.intellij.vcs
 
 import com.intellij.openapi.project.Project
+import git4idea.repo.GitRepositoryManager
 
 class CommitChangesProvider(private val project: Project) {
+    fun canCreateCurrentBranchReview(): Boolean = currentBranchReviewBaseOrNull() != null
+
+    fun getCurrentBranchReviewMetadataOrNull(): BranchReviewMetadata? {
+        val repositoryRoot = GitRepositoryResolver(project).resolveRepositoryRoot()
+        val (currentBranch, baseBranch) = currentBranchReviewBaseOrNull() ?: return null
+
+        val git = GitCommandFallback(repositoryRoot)
+        val mergeBase = git.run("merge-base", baseBranch, "HEAD").trim()
+        val headHash = git.run("rev-parse", "HEAD").trim()
+        return BranchReviewMetadata(
+            repositoryRoot = repositoryRoot,
+            currentBranch = currentBranch,
+            baseBranch = baseBranch,
+            mergeBase = mergeBase,
+            headHash = headHash,
+            title = "$currentBranch vs $baseBranch",
+        )
+    }
+
+    private fun currentBranchReviewBaseOrNull(): Pair<String, String>? {
+        val repository = GitRepositoryManager.getInstance(project).repositories.firstOrNull() ?: return null
+        val currentBranch = repository.currentBranchName ?: return null
+        if (currentBranch == "main" || currentBranch == "master") return null
+        val branches = repository.branches.localBranches.map { it.name }.toSet()
+        val baseBranch = when {
+            "main" in branches -> "main"
+            "master" in branches -> "master"
+            else -> return null
+        }
+        return currentBranch to baseBranch
+    }
+
     fun getCommitMetadata(commitHash: String): CommitMetadata {
         val repositoryRoot = GitRepositoryResolver(project).resolveRepositoryRoot()
         val git = GitCommandFallback(repositoryRoot)
@@ -127,6 +160,15 @@ class CommitChangesProvider(private val project: Project) {
 data class CombinedCommitMetadata(
     val repositoryRoot: String,
     val baseHash: String,
+    val headHash: String,
+    val title: String,
+)
+
+data class BranchReviewMetadata(
+    val repositoryRoot: String,
+    val currentBranch: String,
+    val baseBranch: String,
+    val mergeBase: String,
     val headHash: String,
     val title: String,
 )

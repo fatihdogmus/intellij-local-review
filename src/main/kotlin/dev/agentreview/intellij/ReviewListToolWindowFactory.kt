@@ -18,9 +18,7 @@ class ReviewListToolWindowPanel(project: Project) : SimpleToolWindowPanel(true, 
             manager.selectReview(reviewId)
         }
         reviewListPanel.onDeleteRequested = { review ->
-            if (manager.confirmDelete(review)) {
-                manager.deleteReview(review.id)
-            }
+            manager.deleteReview(review.id)
         }
         setContent(reviewListPanel.component)
         reviewListPanel.setReviews(manager.listReviews(), manager.currentReviewId)
@@ -30,4 +28,3 @@ class ReviewListToolWindowPanel(project: Project) : SimpleToolWindowPanel(true, 
         manager.removeListener(listener)
     }
 }
-

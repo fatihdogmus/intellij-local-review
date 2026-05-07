@@ -7,6 +7,7 @@ import dev.agentreview.intellij.model.Review
 import dev.agentreview.intellij.model.ReviewTarget
 import dev.agentreview.intellij.model.ReviewTargetType
 import dev.agentreview.intellij.persistence.ReviewStateService
+import dev.agentreview.intellij.vcs.BranchReviewMetadata
 import dev.agentreview.intellij.vcs.ChangedFile
 import dev.agentreview.intellij.vcs.ChangedFileStatus
 import dev.agentreview.intellij.vcs.ReviewContent
@@ -93,6 +94,29 @@ class ReviewManagerServiceTest {
     }
 
     @Test
+    fun syncUncommittedReviewStateClearsCommentsWhenChangesGone() {
+        val manager = ReviewManagerService.getInstance(project)
+        manager.hasUncommittedChangesSupplier = { false }
+        manager.uncommittedChangesLoader = { emptyList() }
+        manager.repositoryRootResolver = { "/tmp/repo" }
+        val review = manager.createUncommittedReview()!!
+        ReviewStateService.getInstance(project).findReview(review.id)!!.comments += dev.agentreview.intellij.model.ReviewComment(
+            id = "comment-1",
+            reviewId = review.id,
+            filePath = "src/Foo.kt",
+            anchor = dev.agentreview.intellij.model.CommentAnchor(newLine = 1),
+            body = "stale",
+            createdAt = "2026-05-07T14:20:00+03:00",
+            updatedAt = "2026-05-07T14:20:00+03:00",
+        )
+
+        val changed = manager.syncUncommittedReviewState()
+
+        assertThat(changed).isTrue()
+        assertThat(manager.findReview(review.id)?.comments).isEmpty()
+    }
+
+    @Test
     fun initCreatesPersistentUncommittedReview() {
         val manager = ReviewManagerService.getInstance(project)
 
@@ -100,6 +124,33 @@ class ReviewManagerServiceTest {
 
         assertThat(uncommittedReviews).hasSize(1)
         assertThat(manager.getCurrentReview()?.id).isEqualTo(uncommittedReviews.single().id)
+    }
+
+    @Test
+    fun canCreateBranchReviewReflectsMetadataAvailability() {
+        val manager = ReviewManagerService.getInstance(project)
+        manager.canCreateBranchReviewSupplier = { false }
+
+        assertThat(manager.canCreateBranchReview()).isFalse()
+
+        manager.canCreateBranchReviewSupplier = { true }
+        manager.branchReviewMetadataProvider = { sampleBranchReviewMetadata() }
+
+        assertThat(manager.canCreateBranchReview()).isTrue()
+    }
+
+    @Test
+    fun createBranchReviewCreatesCommitRangeReview() {
+        val manager = ReviewManagerService.getInstance(project)
+        manager.branchReviewMetadataProvider = { sampleBranchReviewMetadata() }
+
+        val review = manager.createBranchReview()
+
+        assertThat(review.target.type).isEqualTo(ReviewTargetType.COMMIT_RANGE)
+        assertThat(review.target.baseRef).isEqualTo("merge-base-123")
+        assertThat(review.target.headRef).isEqualTo("head-456")
+        assertThat(review.target.subject).isEqualTo("feature/test vs main")
+        assertThat(review.title).isEqualTo("feature/test vs main")
     }
 
     private fun seededReview(suffix: String): Review = Review(
@@ -124,5 +175,14 @@ class ReviewManagerServiceTest {
             revisionTitle = "after",
             filePath = path,
         ),
+    )
+
+    private fun sampleBranchReviewMetadata(): BranchReviewMetadata = BranchReviewMetadata(
+        repositoryRoot = "/tmp/repo",
+        currentBranch = "feature/test",
+        baseBranch = "main",
+        mergeBase = "merge-base-123",
+        headHash = "head-456",
+        title = "feature/test vs main",
     )
 }
