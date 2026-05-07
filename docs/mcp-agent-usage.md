@@ -23,8 +23,8 @@ Current build ships MCP review access through JetBrains bundled MCP Server.
 2. Add comments.
 3. Agent calls review MCP tools against current project.
 4. Agent implements requested changes.
-5. Agent marks implemented comments `ADDRESSED` through MCP.
-6. Human reviews and marks comments `RESOLVED` in UI if desired.
+5. Agent marks implemented comments `RESOLVED` through MCP.
+6. Human reviews the result in UI if desired.
 
 ## MCP Status
 
@@ -35,6 +35,5 @@ This plugin now registers custom review tools through `com.intellij.mcpServer.mc
 Current behavior:
 
 - Review read tools are available directly to MCP clients.
-- `review_mark_comment_addressed` updates stored comment state and agent metadata.
-- `review_mark_comment_resolved` stays disabled by default and returns guidance to use `ADDRESSED` instead.
+- `review_mark_comment_resolved` updates stored comment state and optional agent metadata.
 - Review export supports `markdown` and `json`.

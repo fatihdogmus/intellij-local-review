@@ -284,12 +284,12 @@ private class ExistingCommentPanel(
             cursor = Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR)
         }
 
-        val saveButton = JButton("Save").apply {
+                val saveButton = JButton("Save").apply {
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             addActionListener {
                 val updatedBody = body.text.trim()
                 if (updatedBody.isNotEmpty()) {
-                    ReviewManagerService.getInstance(project).updateComment(comment.id, updatedBody, comment.status)
+                    ReviewManagerService.getInstance(project).updateComment(comment.id, updatedBody)
                     body.text = comment.body
                 }
                 exitEditMode()

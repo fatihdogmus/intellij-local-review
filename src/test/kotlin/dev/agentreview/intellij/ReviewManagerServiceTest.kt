@@ -93,8 +93,8 @@ class ReviewManagerServiceTest {
             reviewId = review.id,
             filePath = "src/Foo.kt",
             anchor = dev.agentreview.intellij.model.CommentAnchor(newLine = 3),
-            body = "addressed",
-            status = CommentStatus.ADDRESSED,
+            body = "resolved-too",
+            status = CommentStatus.RESOLVED,
             createdAt = "2026-05-07T14:20:00+03:00",
             updatedAt = "2026-05-07T14:20:00+03:00",
         )
@@ -163,8 +163,10 @@ class ReviewManagerServiceTest {
         manager.repositoryRootResolver = { "/tmp/repo" }
         manager.currentHeadHashSupplier = { "head-1" }
 
-        val first = manager.createUncommittedReview()
-        val second = manager.createUncommittedReview()
+        manager.openDefaultReview()
+        val first = manager.getCurrentReview()
+        manager.openDefaultReview()
+        val second = manager.getCurrentReview()
 
         assertThat(first).isNotNull
         assertThat(second?.id).isEqualTo(first?.id)
@@ -179,7 +181,8 @@ class ReviewManagerServiceTest {
         manager.uncommittedChangesLoader = { emptyList() }
         manager.repositoryRootResolver = { "/tmp/repo" }
         manager.currentHeadHashSupplier = { "head-1" }
-        val review = manager.createUncommittedReview()!!
+        manager.openDefaultReview()
+        val review = manager.getCurrentReview()!!
         manager.selectReview(review.id)
 
         val changed = manager.syncUncommittedReviewState()
@@ -196,7 +199,8 @@ class ReviewManagerServiceTest {
         manager.uncommittedChangesLoader = { emptyList() }
         manager.repositoryRootResolver = { "/tmp/repo" }
         manager.currentHeadHashSupplier = { "head-1" }
-        val review = manager.createUncommittedReview()!!
+        manager.openDefaultReview()
+        val review = manager.getCurrentReview()!!
         ReviewStateService.getInstance(project).findReview(review.id)!!.comments += dev.agentreview.intellij.model.ReviewComment(
             id = "comment-1",
             reviewId = review.id,
@@ -220,7 +224,8 @@ class ReviewManagerServiceTest {
         manager.uncommittedChangesLoader = { listOf(sampleChangedFile("src/Foo.kt")) }
         manager.repositoryRootResolver = { "/tmp/repo" }
         manager.currentHeadHashSupplier = { "head-1" }
-        val review = manager.createUncommittedReview()!!
+        manager.openDefaultReview()
+        val review = manager.getCurrentReview()!!
         ReviewStateService.getInstance(project).findReview(review.id)!!.comments += dev.agentreview.intellij.model.ReviewComment(
             id = "comment-1",
             reviewId = review.id,

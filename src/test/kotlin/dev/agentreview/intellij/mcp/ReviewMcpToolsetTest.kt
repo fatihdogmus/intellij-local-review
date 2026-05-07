@@ -62,16 +62,16 @@ class ReviewMcpToolsetTest {
     }
 
     @Test
-    suspend fun reviewMarkCommentAddressedStoresAgentMetadata() {
+    suspend fun reviewMarkCommentResolvedStoresAgentMetadata() {
         val manager = ReviewManagerService.getInstance(project)
-        val review = seededReview("addressed")
+        val review = seededReview("resolved")
         ReviewStateService.getInstance(project).addReview(review)
 
         manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 2, "avoid bang bang")
         val comment = manager.findReview(review.id)?.comments?.single() ?: error("comment missing")
 
         val result = json.decodeFromString<MutationResult>(
-            ReviewMcpToolset().reviewMarkCommentAddressed(
+            ReviewMcpToolset().reviewMarkCommentResolved(
                 commentId = comment.id,
                 message = "Replaced with explicit null branch",
                 agentName = "codex",
@@ -81,8 +81,8 @@ class ReviewMcpToolsetTest {
 
         val updated = manager.findReview(review.id)?.comments?.single() ?: error("updated comment missing")
         assertThat(result.ok).isTrue()
-        assertThat(result.newStatus).isEqualTo("ADDRESSED")
-        assertThat(updated.status).isEqualTo(CommentStatus.ADDRESSED)
+        assertThat(result.newStatus).isEqualTo("RESOLVED")
+        assertThat(updated.status).isEqualTo(CommentStatus.RESOLVED)
         assertThat(updated.agentMetadata?.addressedBy).isEqualTo("codex")
         assertThat(updated.agentMetadata?.message).isEqualTo("Replaced with explicit null branch")
         assertThat(updated.agentMetadata?.runId).isEqualTo("run-42")

@@ -21,20 +21,6 @@ import dev.agentreview.intellij.export.ExportUiSupport
 import dev.agentreview.intellij.ui.showInlineCommentForm
 import dev.agentreview.intellij.vcs.ChangedFileStatus
 
-class StartUncommittedReviewAction : DumbAwareAction() {
-    override fun actionPerformed(event: AnActionEvent) {
-        val project = event.project ?: return
-        ReviewManagerService.getInstance(project).openDefaultReview()
-    }
-}
-
-class StartReviewFromCommitHashAction : DumbAwareAction() {
-    override fun actionPerformed(event: AnActionEvent) {
-        val project = event.project ?: return
-        VcsLogReviewSupport.openLogAndPromptSelection(project)
-    }
-}
-
 class StartReviewFromGitLogAction : DumbAwareAction() {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -97,20 +83,6 @@ class AddReviewCommentAction : DumbAwareAction() {
         val manager = ReviewManagerService.getInstance(project)
         val hasReviewContext = manager.getCurrentReview() != null && manager.currentFilePath != null
         event.presentation.isEnabled = hasEditorContext || hasReviewContext
-    }
-}
-
-class CopyAgentPromptAction : DumbAwareAction() {
-    override fun actionPerformed(event: AnActionEvent) {
-        val project = event.project ?: return
-        val manager = ReviewManagerService.getInstance(project)
-        val review = manager.getCurrentReview() ?: return
-        manager.buildAgentPrompt(review.id)?.let { ExportUiSupport.copyToClipboard(project, it) }
-    }
-
-    override fun update(event: AnActionEvent) {
-        val project = event.project
-        event.presentation.isEnabled = project != null && ReviewManagerService.getInstance(project).getCurrentReview() != null
     }
 }
 

@@ -14,8 +14,6 @@ class ReviewPageManager(
         FileEditorManager.getInstance(project).openFile(file, true)
     }
 
-    fun file(): ReviewPageVirtualFile = file
-
     companion object {
         fun getInstance(project: Project): ReviewPageManager = project.getService(ReviewPageManager::class.java)
     }

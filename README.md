@@ -139,15 +139,12 @@ The diff viewer supports:
 
 Supported comment statuses:
 - `OPEN`
-- `ADDRESSED`
 - `RESOLVED`
-- `WONT_FIX`
 
 Current UI behavior emphasizes open work:
 - active review surfaces show open comments only
 - review lists still show open/resolved counts
-- agents are expected to mark comments `ADDRESSED`
-- final resolution remains a human action in the UI
+- agents or humans can mark comments `RESOLVED`
 
 ### Save and load
 
@@ -174,14 +171,12 @@ Current MCP tools include:
 - `review_get_review`
 - `review_list_unresolved_comments`
 - `review_get_comment_context`
-- `review_mark_comment_addressed`
 - `review_mark_comment_resolved`
 - `review_export`
 
 Important MCP behavior:
 - tool responses are JSON strings
-- `review_mark_comment_resolved` is intentionally disabled for agents
-- agents should use `review_mark_comment_addressed` instead
+- `review_mark_comment_resolved` can attach optional agent metadata about the implemented change
 
 ## Development
 

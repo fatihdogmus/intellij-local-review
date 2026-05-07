@@ -105,12 +105,6 @@ class ReviewManagerService(private val project: Project) {
         notifyChanged()
     }
 
-    fun createUncommittedReview(): Review? {
-        val review = ensureUncommittedReview()
-        openReview(review.id)
-        return review
-    }
-
     fun openDefaultReview() {
         val review = ensureUncommittedReview()
         currentReviewId = review.id
@@ -314,10 +308,9 @@ class ReviewManagerService(private val project: Project) {
         touch(review)
     }
 
-    fun updateComment(commentId: String, body: String, status: CommentStatus) {
+    fun updateComment(commentId: String, body: String) {
         val (review, comment) = findComment(commentId) ?: return
         comment.body = body
-        comment.status = status
         comment.updatedAt = nowIso()
         touch(review)
     }
@@ -329,20 +322,20 @@ class ReviewManagerService(private val project: Project) {
         }
     }
 
-    fun markCommentAddressed(commentId: String, message: String? = null, agentName: String = "user", runId: String? = null) {
+    fun markCommentResolved(commentId: String, message: String? = null, agentName: String? = null, runId: String? = null) {
         val (review, comment) = findComment(commentId) ?: return
-        comment.status = CommentStatus.ADDRESSED
-        comment.agentMetadata = AgentMetadata(
-            addressedBy = agentName,
-            addressedAt = nowIso(),
-            message = message,
-            runId = runId,
-        )
-        comment.updatedAt = nowIso()
-        touch(review)
+        comment.agentMetadata = if (message != null || agentName != null || runId != null) {
+            AgentMetadata(
+                addressedBy = agentName,
+                addressedAt = nowIso(),
+                message = message,
+                runId = runId,
+            )
+        } else {
+            comment.agentMetadata
+        }
+        setCommentStatus(commentId, CommentStatus.RESOLVED)
     }
-
-    fun markCommentResolved(commentId: String) = setCommentStatus(commentId, CommentStatus.RESOLVED)
 
     fun commentsForFile(reviewId: String, filePath: String): List<ReviewComment> =
         findReview(reviewId)

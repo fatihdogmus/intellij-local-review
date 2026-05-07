@@ -100,9 +100,9 @@ class ReviewMcpToolset : McpToolset {
         )
     }
 
-    @McpTool(name = "review_mark_comment_addressed")
-    @McpDescription("Mark one comment ADDRESSED after implementing requested code change.")
-    suspend fun reviewMarkCommentAddressed(
+    @McpTool(name = "review_mark_comment_resolved")
+    @McpDescription("Resolve one comment after implementing requested code change.")
+    suspend fun reviewMarkCommentResolved(
         @McpDescription("Comment id")
         commentId: String,
         @McpDescription("Optional implementation note from agent")
@@ -114,28 +114,13 @@ class ReviewMcpToolset : McpToolset {
     ): String {
         val manager = manager()
         manager.findCommentWithReview(commentId) ?: mcpFail("Comment not found: $commentId")
-        manager.markCommentAddressed(
+        manager.markCommentResolved(
             commentId = commentId,
             message = message,
             agentName = agentName?.takeIf { it.isNotBlank() } ?: defaultAgentName(),
             runId = runId,
         )
-        return json.encodeToString(MutationResult(ok = true, commentId = commentId, newStatus = CommentStatus.ADDRESSED.name))
-    }
-
-    @McpTool(name = "review_mark_comment_resolved")
-    @McpDescription("Resolve one comment. Disabled for agents by default.")
-    suspend fun reviewMarkCommentResolved(
-        @McpDescription("Comment id")
-        commentId: String,
-    ): String {
-        return json.encodeToString(
-            MutationResult(
-                ok = false,
-                commentId = commentId,
-                error = "Agents are not allowed to mark comments resolved. Mark the comment ADDRESSED instead.",
-            ),
-        )
+        return json.encodeToString(MutationResult(ok = true, commentId = commentId, newStatus = CommentStatus.RESOLVED.name))
     }
 
     @McpTool(name = "review_export")
@@ -221,7 +206,6 @@ class ReviewMcpToolset : McpToolset {
             type = review.target.type,
             status = review.status,
             openCommentCount = review.comments.count { it.status == CommentStatus.OPEN },
-            addressedCommentCount = review.comments.count { it.status == CommentStatus.ADDRESSED },
             resolvedCommentCount = review.comments.count { it.status == CommentStatus.RESOLVED },
             repositoryRoot = review.repositoryRoot,
             updatedAt = review.updatedAt,
@@ -238,6 +222,7 @@ class ReviewMcpToolset : McpToolset {
             updatedAt = review.updatedAt,
             status = review.status,
             openCommentCount = review.comments.count { it.status == CommentStatus.OPEN },
+            resolvedCommentCount = review.comments.count { it.status == CommentStatus.RESOLVED },
             comments = comments,
         )
     }
@@ -296,7 +281,6 @@ data class ReviewSummary(
     val type: ReviewTargetType,
     val status: ReviewStatus,
     val openCommentCount: Int,
-    val addressedCommentCount: Int,
     val resolvedCommentCount: Int,
     val repositoryRoot: String,
     val updatedAt: String,
@@ -317,6 +301,7 @@ data class ReviewDetails(
     val updatedAt: String,
     val status: ReviewStatus,
     val openCommentCount: Int,
+    val resolvedCommentCount: Int,
     val comments: List<CommentSummary>,
 )
 

@@ -50,8 +50,8 @@ class ReviewUnitTest {
                 ),
                 sampleReview().comments.first().copy(
                     id = "comment-3",
-                    body = "already addressed",
-                    status = CommentStatus.ADDRESSED,
+                    body = "already resolved too",
+                    status = CommentStatus.RESOLVED,
                 ),
             ),
         )
@@ -62,7 +62,7 @@ class ReviewUnitTest {
             .contains("- Open Comments: 1")
             .contains("Avoid !! here.")
             .doesNotContain("already resolved")
-            .doesNotContain("already addressed")
+            .doesNotContain("already resolved too")
     }
 
     @Test

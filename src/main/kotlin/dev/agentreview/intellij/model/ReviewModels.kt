@@ -1,6 +1,12 @@
 package dev.agentreview.intellij.model
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 
 @Serializable
 data class Review(
@@ -73,12 +79,26 @@ enum class ReviewStatus {
     OPEN,
 }
 
-@Serializable
+@Serializable(with = CommentStatusSerializer::class)
 enum class CommentStatus {
     OPEN,
-    ADDRESSED,
     RESOLVED,
-    WONT_FIX,
+}
+
+object CommentStatusSerializer : KSerializer<CommentStatus> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("CommentStatus", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: CommentStatus) {
+        encoder.encodeString(value.name)
+    }
+
+    override fun deserialize(decoder: Decoder): CommentStatus {
+        return when (decoder.decodeString()) {
+            CommentStatus.OPEN.name -> CommentStatus.OPEN
+            CommentStatus.RESOLVED.name -> CommentStatus.RESOLVED
+            else -> CommentStatus.OPEN
+        }
+    }
 }
 
 @Serializable

@@ -31,20 +31,12 @@
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift P"/>
         </action>
         <action
-            id="LocalReview.StartUncommittedReview"
-            class="dev.agentreview.intellij.actions.StartUncommittedReviewAction"
-            text="Start Review of Uncommitted Changes"/>
-        <action
             id="LocalReview.StartReviewFromGitLog"
             class="dev.agentreview.intellij.actions.StartReviewFromGitLogAction"
             text="Create Local Review">
             <add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
             <add-to-group group-id="Vcs.Log.Toolbar.RightCorner" anchor="last"/>
         </action>
-        <action
-            id="LocalReview.StartReviewFromCommitHash"
-            class="dev.agentreview.intellij.actions.StartReviewFromCommitHashAction"
-            text="Pick Commit in VCS Log..."/>
         <action
             id="LocalReview.AddComment"
             class="dev.agentreview.intellij.actions.AddReviewCommentAction"
@@ -57,9 +49,5 @@
             text="Go to File">
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
         </action>
-        <action
-            id="LocalReview.CopyAgentPrompt"
-            class="dev.agentreview.intellij.actions.CopyAgentPromptAction"
-            text="Copy Prompt"/>
     </actions>
 </idea-plugin>
