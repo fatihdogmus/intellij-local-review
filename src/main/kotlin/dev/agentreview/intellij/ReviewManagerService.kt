@@ -1,5 +1,6 @@
 package dev.agentreview.intellij
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
@@ -294,7 +295,19 @@ class ReviewManagerService(private val project: Project) {
     }
 
     private fun notifyChanged() {
-        listeners.toList().forEach { it() }
+        val notifyListeners = {
+            listeners.toList().forEach { it() }
+        }
+        val application = ApplicationManager.getApplication()
+        if (application.isDispatchThread) {
+            notifyListeners()
+        } else {
+            application.invokeLater {
+                if (!project.isDisposed) {
+                    notifyListeners()
+                }
+            }
+        }
     }
 
     companion object {
