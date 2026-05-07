@@ -47,10 +47,10 @@ import javax.swing.border.AbstractBorder
 private const val PLACEHOLDER_TEXT = "Add comment"
 private const val COMMENT_ACTIONS_PLACE = "LocalReview.CommentActions"
 private const val COMMENT_CARD_ARC = 18
-private val BLUE_BORDER = JBColor(Color(0x35, 0x7A, 0xB8), Color(0x35, 0x7A, 0xB8))
-private val COMMENT_BORDER = JBColor(Color(0x4B, 0x55, 0x63), Color(0x4B, 0x55, 0x63))
+private val BLUE_BORDER = UIManager.getColor("Component.focusColor") ?: JBColor(Color(0x35, 0x7A, 0xB8), Color(0x6C, 0xB8, 0xFF))
+private val COMMENT_BORDER = UIManager.getColor("Component.borderColor") ?: JBColor.border()
 private val DELETE_RED = JBColor(Color(0xC4, 0x2B, 0x1C), Color(0xFF, 0x8E, 0x8A))
-private val MENU_HOVER_BG = JBColor(Color(0xE8, 0xF1, 0xFF), Color(0x2C, 0x3D, 0x55))
+private val MENU_HOVER_BG = UIManager.getColor("List.selectionBackground") ?: JBColor(Color(0xE8, 0xF1, 0xFF), Color(0x2C, 0x3D, 0x55))
 
 @Suppress("UnstableApiUsage")
 fun showReviewCommentInlays(
@@ -251,6 +251,11 @@ private class ExistingCommentPanel(
                             enterEditMode()
                         }
                     })
+                    add(object : AnAction("Resolve comment", null, IconUtil.colorize(AllIcons.Actions.Checked, BLUE_BORDER, false, false)) {
+                        override fun actionPerformed(e: AnActionEvent) {
+                            ReviewManagerService.getInstance(project).markCommentResolved(comment.id)
+                        }
+                    })
                     add(object : AnAction("Delete comment", null, IconUtil.colorize(AllIcons.General.Remove, DELETE_RED, false, false)) {
                         override fun actionPerformed(e: AnActionEvent) {
                             ReviewManagerService.getInstance(project).deleteComment(comment.id)
@@ -319,7 +324,7 @@ private class ExistingCommentPanel(
             BorderFactory.createEmptyBorder(4, 4, 4, 4),
         )
         editActionsPanel.isVisible = true
-        body.background = JBColor(Color(0xF7, 0xFB, 0xFF), Color(0x27, 0x31, 0x3A))
+        body.background = UIManager.getColor("TextArea.background") ?: normalBackground
         body.requestFocusInWindow()
         body.caretPosition = body.text.length
         revalidate()

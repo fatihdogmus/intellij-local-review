@@ -34,7 +34,15 @@ class ReviewListPanel {
             ) {
                 value ?: return
                 append(value.title, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
-                append("\n${value.target.type} · ${value.comments.count { it.status == CommentStatus.OPEN }} open · ${displayTimestamp(value.updatedAt)}")
+                val openCount = value.comments.count { it.status == CommentStatus.OPEN }
+                val resolvedCount = value.comments.count { it.status != CommentStatus.OPEN }
+                val countText = listOfNotNull(
+                    openCount.takeIf { it > 0 }?.let { "$it Open" },
+                    resolvedCount.takeIf { it > 0 }?.let { "$it Resolved" },
+                ).joinToString(" ")
+                val details = listOfNotNull(value.target.type, countText.takeIf { it.isNotEmpty() }, displayTimestamp(value.updatedAt))
+                    .joinToString(" · ")
+                append("\n$details")
             }
         }
         list.addListSelectionListener {

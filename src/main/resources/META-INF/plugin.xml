@@ -51,6 +51,12 @@
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
         </action>
         <action
+            id="LocalReview.OpenReviewedFile"
+            class="dev.agentreview.intellij.actions.OpenReviewedFileAction"
+            text="Go to File">
+            <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
+        </action>
+        <action
             id="LocalReview.CopyAgentPrompt"
             class="dev.agentreview.intellij.actions.CopyAgentPromptAction"
             text="Copy Prompt"/>

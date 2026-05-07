@@ -21,6 +21,10 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.Disposer
+import com.intellij.ui.JBColor
+import dev.agentreview.intellij.ReviewManagerService
+import dev.agentreview.intellij.ReviewFileNavigator
+import dev.agentreview.intellij.vcs.ChangedFileStatus
 import dev.agentreview.intellij.model.DiffSide
 import dev.agentreview.intellij.ui.showInlineCommentForm
 import dev.agentreview.intellij.ui.showReviewCommentInlays
@@ -31,13 +35,16 @@ import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.Rectangle
 import java.awt.RenderingHints
+import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
+import javax.swing.AbstractAction
+import javax.swing.KeyStroke
 import javax.swing.SwingUtilities
 
 val REVIEW_DIFF_EDITOR_KEY = Key.create<ReviewDiffRequestData>("local.review.diff.editor.data")
 
-private val GREEN = Color(0x2E, 0xA4, 0x4F)
-private val HOVER_BG = Color(0x2E, 0xA4, 0x4F, 18)
+private val GREEN = JBColor(Color(0x2E, 0xA4, 0x4F), Color(0x4F, 0xC7, 0x70))
+private val HOVER_BG = JBColor(Color(0x2E, 0xA4, 0x4F, 18), Color(0x4F, 0xC7, 0x70, 28))
 private const val ICON_SIZE = 16
 private const val ICON_PAD = 4
 private const val ICON_ARC = 6
@@ -68,6 +75,9 @@ class ReviewDiffExtension : DiffExtension() {
             else -> return
         }
         allEditors.forEach { it.putUserData(REVIEW_DIFF_EDITOR_KEY, requestData) }
+        if (requestData.changedFile.status != ChangedFileStatus.DELETED) {
+            allEditors.forEach { installOpenFileShortcut(project, it, requestData) }
+        }
 
         val renderer = CommentLineMarkerRenderer(project, commentEditor, requestData)
         val commentInlays = showReviewCommentInlays(project, commentEditor, requestData)
@@ -89,6 +99,16 @@ class ReviewDiffExtension : DiffExtension() {
             }
         })
     }
+}
+
+private fun installOpenFileShortcut(project: com.intellij.openapi.project.Project, editor: EditorEx, requestData: ReviewDiffRequestData) {
+    val actionKey = "localReview.openReviewedFile"
+    editor.contentComponent.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_F4, 0), actionKey)
+    editor.contentComponent.actionMap.put(actionKey, object : AbstractAction() {
+        override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+            ReviewFileNavigator.openChangedFile(project, ReviewManagerService.getInstance(project).findReview(requestData.reviewId)?.repositoryRoot ?: return, requestData.changedFile)
+        }
+    })
 }
 
 private class CommentLineMarkerRenderer(

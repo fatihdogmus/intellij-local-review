@@ -88,6 +88,26 @@ class ReviewMcpToolsetTest {
         assertThat(updated.agentMetadata?.runId).isEqualTo("run-42")
     }
 
+    @Test
+    suspend fun reviewGetReviewReportsOpenAndResolvedCommentCounts() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededReview("counts")
+        ReviewStateService.getInstance(project).addReview(review)
+
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 2, "open comment")
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 3, "resolved comment")
+        val resolved = manager.findReview(review.id)?.comments?.last() ?: error("comment missing")
+        manager.markCommentResolved(resolved.id)
+
+        val result = json.decodeFromString<ReviewResult>(
+            ReviewMcpToolset().reviewGetReview(reviewId = review.id, includeComments = true, includeResolved = true),
+        )
+
+        assertThat(result.review.openCommentCount).isEqualTo(1)
+        assertThat(result.review.resolvedCommentCount).isEqualTo(1)
+        assertThat(result.review.comments).hasSize(2)
+    }
+
     private fun seededReview(suffix: String, target: ReviewTarget = ReviewTarget(type = ReviewTargetType.UNCOMMITTED)): Review = Review(
         id = "review-mcp-$suffix",
         title = "MCP review",

@@ -17,13 +17,25 @@ import dev.agentreview.intellij.model.ReviewStatus
 import dev.agentreview.intellij.model.ReviewTarget
 import dev.agentreview.intellij.model.ReviewTargetType
 import dev.agentreview.intellij.model.commitHashIfAny
+import dev.agentreview.intellij.persistence.ReviewLoadResult
+import dev.agentreview.intellij.persistence.ReviewSavePlan
 import dev.agentreview.intellij.persistence.ReviewStateService
+import dev.agentreview.intellij.persistence.SavedReviewArchive
 import dev.agentreview.intellij.util.nowIso
 import dev.agentreview.intellij.vcs.ChangedFile
 import dev.agentreview.intellij.vcs.BranchReviewMetadata
 import dev.agentreview.intellij.vcs.CommitChangesProvider
+import dev.agentreview.intellij.vcs.GitCommandFallback
 import dev.agentreview.intellij.vcs.GitRepositoryResolver
 import dev.agentreview.intellij.vcs.UncommittedChangesProvider
+import git4idea.repo.GitRepositoryManager
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import org.valiktor.functions.isNotBlank
+import org.valiktor.functions.isNotNull
+import org.valiktor.validate
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.UUID
 
 @Service(Service.Level.PROJECT)
@@ -31,10 +43,17 @@ class ReviewManagerService(private val project: Project) {
     private val stateService = ReviewStateService.getInstance(project)
     private val diffContextExtractor = DiffContextExtractor()
     private val listeners = mutableSetOf<() -> Unit>()
+    private val archiveJson = Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }
     internal var uncommittedChangesLoader: () -> List<ChangedFile> = { UncommittedChangesProvider(project).getChangedFiles() }
     internal var repositoryRootResolver: () -> String = { GitRepositoryResolver(project).resolveRepositoryRoot() }
     internal var canCreateBranchReviewSupplier: () -> Boolean = { CommitChangesProvider(project).canCreateCurrentBranchReview() }
     internal var branchReviewMetadataProvider: () -> BranchReviewMetadata? = { CommitChangesProvider(project).getCurrentBranchReviewMetadataOrNull() }
+    internal var isCommitReachableOnCurrentBranchSupplier: (String) -> Boolean = { commitHash ->
+        GitCommandFallback(repositoryRootResolver()).runOrNull("merge-base", "--is-ancestor", commitHash, "HEAD") != null
+    }
+    internal var currentHeadHashSupplier: () -> String? = {
+        GitRepositoryManager.getInstance(project).repositories.firstOrNull()?.currentRevision
+    }
     internal var hasUncommittedChangesSupplier: () -> Boolean = {
         val changeListManager = ChangeListManager.getInstance(project)
         changeListManager.getAllChanges().isNotEmpty() || changeListManager.unversionedFilesPaths.isNotEmpty()
@@ -172,6 +191,83 @@ class ReviewManagerService(private val project: Project) {
         return review
     }
 
+    fun canSaveReview(review: Review?): Boolean = review != null && review.target.type != ReviewTargetType.UNCOMMITTED
+
+    fun renameReview(reviewId: String, newTitle: String) {
+        val review = findReview(reviewId) ?: return
+        if (review.target.type == ReviewTargetType.UNCOMMITTED) return
+        val trimmedTitle = newTitle.trim()
+        if (trimmedTitle.isEmpty() || trimmedTitle == review.title) return
+        review.title = trimmedTitle
+        touch(review)
+    }
+
+    fun prepareSaveReview(reviewId: String, newTitle: String): ReviewSavePlan? {
+        if (!canSaveReview(findReview(reviewId))) return null
+        renameReview(reviewId, newTitle)
+        val review = findReview(reviewId) ?: return null
+        val archive = SavedReviewArchive(
+            originalReviewId = review.id,
+            title = review.title,
+            targetType = review.target.type,
+            beginCommit = review.target.beginCommit(),
+            endCommit = review.target.endCommit(),
+            subject = review.target.subject,
+            reviewStatus = review.status,
+            createdAt = review.createdAt,
+            updatedAt = review.updatedAt,
+            comments = review.comments.toList(),
+        )
+        val filePath = reviewArchivePath(review)
+        return ReviewSavePlan(
+            reviewId = review.id,
+            title = review.title,
+            filePath = filePath,
+            payload = archiveJson.encodeToString(archive),
+            fileExists = Files.exists(filePath),
+        )
+    }
+
+    fun saveReviewToFile(plan: ReviewSavePlan) {
+        Files.createDirectories(plan.filePath.parent)
+        Files.writeString(plan.filePath, plan.payload)
+    }
+
+    fun loadReviewFromFile(filePath: Path): ReviewLoadResult = runCatching {
+        val archive = archiveJson.decodeFromString<SavedReviewArchive>(Files.readString(filePath)).validatedForImport()
+        val beginCommit = archive.beginCommit
+        val endCommit = archive.endCommit
+        if (beginCommit != null && !isCommitReachableOnCurrentBranchSupplier(beginCommit)) {
+            return ReviewLoadResult(error = "Begin commit is not reachable from current branch: $beginCommit")
+        }
+        if (endCommit != null && !isCommitReachableOnCurrentBranchSupplier(endCommit)) {
+            return ReviewLoadResult(error = "End commit is not reachable from current branch: $endCommit")
+        }
+
+        val reviewId = UUID.randomUUID().toString()
+        val now = nowIso()
+        val review = Review(
+            id = reviewId,
+            title = archive.title,
+            target = archive.toReviewTarget(),
+            repositoryRoot = repositoryRootResolver(),
+            createdAt = archive.createdAt.ifBlank { now },
+            updatedAt = archive.updatedAt.ifBlank { now },
+            status = archive.reviewStatus,
+            comments = archive.comments.map { comment ->
+                comment.copy(id = UUID.randomUUID().toString(), reviewId = reviewId)
+            }.toMutableList(),
+        )
+        stateService.addReview(review)
+        openReview(review.id)
+        ReviewLoadResult(reviewId = review.id)
+    }.getOrElse { error ->
+        if (error is MalformedImportedReviewException || error is kotlinx.serialization.SerializationException || error is org.valiktor.ConstraintViolationException) {
+            return ReviewLoadResult(error = "The imported format is malformed")
+        }
+        ReviewLoadResult(error = error.message ?: "Failed to load review")
+    }
+
     fun deleteReview(reviewId: String) {
         if (findReview(reviewId)?.target?.type == ReviewTargetType.UNCOMMITTED) return
         stateService.removeReview(reviewId)
@@ -252,7 +348,7 @@ class ReviewManagerService(private val project: Project) {
         findReview(reviewId)
             ?.comments
             ?.asSequence()
-            ?.filter { it.filePath == filePath }
+            ?.filter { it.filePath == filePath && it.status == CommentStatus.OPEN }
             ?.sortedWith(compareBy({ it.anchor.newLine ?: it.anchor.oldLine ?: Int.MAX_VALUE }, { it.createdAt }))
             ?.toList()
             .orEmpty()
@@ -296,18 +392,25 @@ class ReviewManagerService(private val project: Project) {
         val keepReview = uncommittedReviews.maxByOrNull { it.updatedAt } ?: createNewUncommittedReview()
         val removedIds = uncommittedReviews.filter { it.id != keepReview.id }.map { it.id }
         val hasChanges = hasUncommittedChanges()
-        val clearedComments = if (!hasChanges && keepReview.comments.isNotEmpty()) {
+        val currentHeadHash = currentHeadHashSupplier()
+        val headChanged = currentHeadHash != null && currentHeadHash != keepReview.target.commitHash
+        val clearedComments = if ((headChanged || !hasChanges) && keepReview.comments.isNotEmpty()) {
             keepReview.comments.clear()
-            keepReview.updatedAt = nowIso()
             true
         } else {
             false
         }
+        if (headChanged) {
+            keepReview.target.commitHash = currentHeadHash
+        }
+        if (headChanged || clearedComments) {
+            keepReview.updatedAt = nowIso()
+        }
         val shouldSelectUncommitted = currentReviewId == null
-        if (!hasChanges && currentReviewId == keepReview.id) {
+        if ((!hasChanges || headChanged) && currentReviewId == keepReview.id) {
             currentFilePath = null
         }
-        if (removedIds.isEmpty() && !shouldSelectUncommitted && !clearedComments) return false
+        if (removedIds.isEmpty() && !shouldSelectUncommitted && !clearedComments && !headChanged) return false
 
         removedIds.forEach(stateService::removeReview)
 
@@ -326,6 +429,9 @@ class ReviewManagerService(private val project: Project) {
 
     private fun currentUncommittedChanges(): List<ChangedFile> = runCatching { uncommittedChangesLoader() }.getOrElse { emptyList() }
 
+    private fun reviewArchivePath(review: Review): Path =
+        Path.of(review.repositoryRoot, ".local-review", "${review.title.toKebabCase()}-${review.id}.json")
+
     private fun ensureUncommittedReview(): Review {
         syncUncommittedReviewState(notify = false)
         return findUncommittedReview() ?: createNewUncommittedReview().also {
@@ -340,7 +446,7 @@ class ReviewManagerService(private val project: Project) {
         val review = Review(
             id = UUID.randomUUID().toString(),
             title = "Uncommitted changes",
-            target = ReviewTarget(type = ReviewTargetType.UNCOMMITTED, baseRef = "HEAD", headRef = "WORKTREE"),
+            target = ReviewTarget(type = ReviewTargetType.UNCOMMITTED, baseRef = "HEAD", headRef = "WORKTREE", commitHash = currentHeadHashSupplier()),
             repositoryRoot = repositoryRootResolver(),
             createdAt = now,
             updatedAt = now,
@@ -381,3 +487,71 @@ class ReviewManagerService(private val project: Project) {
         fun getInstance(project: Project): ReviewManagerService = project.getService(ReviewManagerService::class.java)
     }
 }
+
+private fun SavedReviewArchive.toReviewTarget(): ReviewTarget = when (targetType) {
+    ReviewTargetType.COMMIT -> ReviewTarget(
+        type = ReviewTargetType.COMMIT,
+        commitHash = endCommit,
+        parentHash = beginCommit,
+        subject = subject,
+    )
+    ReviewTargetType.COMMIT_RANGE -> ReviewTarget(
+        type = ReviewTargetType.COMMIT_RANGE,
+        baseRef = beginCommit,
+        headRef = endCommit,
+        subject = subject,
+    )
+    ReviewTargetType.UNCOMMITTED -> ReviewTarget(type = ReviewTargetType.UNCOMMITTED)
+}
+
+private fun ReviewTarget.beginCommit(): String? = when (type) {
+    ReviewTargetType.COMMIT -> parentHash
+    ReviewTargetType.COMMIT_RANGE -> baseRef
+    ReviewTargetType.UNCOMMITTED -> null
+}
+
+private fun ReviewTarget.endCommit(): String? = when (type) {
+    ReviewTargetType.COMMIT -> commitHash
+    ReviewTargetType.COMMIT_RANGE -> headRef
+    ReviewTargetType.UNCOMMITTED -> null
+}
+
+private fun SavedReviewArchive.validatedForImport(): SavedReviewArchive {
+    validate(this) {
+        validate(SavedReviewArchive::originalReviewId).isNotBlank()
+        validate(SavedReviewArchive::title).isNotBlank()
+        validate(SavedReviewArchive::createdAt).isNotBlank()
+        validate(SavedReviewArchive::updatedAt).isNotBlank()
+    }
+    comments.forEach { comment ->
+        validate(comment) {
+            validate(ReviewComment::id).isNotBlank()
+            validate(ReviewComment::reviewId).isNotBlank()
+            validate(ReviewComment::filePath).isNotBlank()
+            validate(ReviewComment::body).isNotBlank()
+            validate(ReviewComment::createdAt).isNotBlank()
+            validate(ReviewComment::updatedAt).isNotBlank()
+        }
+    }
+    when (targetType) {
+        ReviewTargetType.COMMIT -> validate(this) {
+            validate(SavedReviewArchive::beginCommit).isNotNull()
+            validate(SavedReviewArchive::endCommit).isNotNull()
+        }
+        ReviewTargetType.COMMIT_RANGE -> validate(this) {
+            validate(SavedReviewArchive::beginCommit).isNotNull()
+            validate(SavedReviewArchive::endCommit).isNotNull()
+        }
+        ReviewTargetType.UNCOMMITTED -> throw MalformedImportedReviewException()
+    }
+    return this
+}
+
+private class MalformedImportedReviewException : RuntimeException()
+
+internal fun String.toKebabCase(): String =
+    trim()
+        .lowercase()
+        .replace("/", "-")
+        .replace("\\", "-")
+        .replace(Regex("\\s+"), "-")

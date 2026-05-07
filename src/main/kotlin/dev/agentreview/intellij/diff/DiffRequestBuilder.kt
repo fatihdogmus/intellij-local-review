@@ -14,8 +14,8 @@ class DiffRequestBuilder(private val project: Project) {
         val fileType = FileTypeManager.getInstance().getFileTypeByFileName(changedFile.filePath)
         val beforeText = changedFile.beforeContent?.text.orEmpty()
         val afterText = changedFile.afterContent?.text.orEmpty()
-        val beforeTitle = changedFile.beforeContent?.revisionTitle ?: "Missing"
-        val afterTitle = changedFile.afterContent?.revisionTitle ?: "Missing"
+        val beforeTitle = changedFile.beforeContent?.let { "${it.revisionTitle}  ${it.filePath}" } ?: "Missing  ${changedFile.filePath}"
+        val afterTitle = changedFile.afterContent?.let { "${it.revisionTitle}  ${it.filePath}" } ?: "Missing  ${changedFile.filePath}"
         val beforeContent = if (beforeText.isEmpty()) factory.createEmpty() else factory.create(project, beforeText, fileType)
         val afterContent = if (afterText.isEmpty()) factory.createEmpty() else factory.create(project, afterText, fileType)
         return SimpleDiffRequest(

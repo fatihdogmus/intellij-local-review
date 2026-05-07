@@ -39,6 +39,33 @@ class ReviewUnitTest {
     }
 
     @Test
+    fun promptBuilderIncludesOnlyOpenComments() {
+        val review = sampleReview().copy(
+            comments = mutableListOf(
+                sampleReview().comments.first(),
+                sampleReview().comments.first().copy(
+                    id = "comment-2",
+                    body = "already resolved",
+                    status = CommentStatus.RESOLVED,
+                ),
+                sampleReview().comments.first().copy(
+                    id = "comment-3",
+                    body = "already addressed",
+                    status = CommentStatus.ADDRESSED,
+                ),
+            ),
+        )
+
+        val exported = AgentPromptBuilder().build(review)
+
+        assertThat(exported)
+            .contains("- Open Comments: 1")
+            .contains("Avoid !! here.")
+            .doesNotContain("already resolved")
+            .doesNotContain("already addressed")
+    }
+
+    @Test
     fun diffContextExtractorBuildsMultiLineAnchorWithoutSelectedLinesInAfterContext() {
         val anchor = DiffContextExtractor().buildAnchor(
             changedFile = ChangedFile(

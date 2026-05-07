@@ -7,17 +7,22 @@ import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.fileChooser.FileChooser
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.DumbAwareAction
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.JBSplitter
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.ui.JBUI
 import dev.agentreview.intellij.editor.ReviewPageManager
+import dev.agentreview.intellij.ReviewFileNavigator
 import dev.agentreview.intellij.ReviewManagerService
 import dev.agentreview.intellij.model.CommentStatus
 import dev.agentreview.intellij.diff.DiffRequestBuilder
@@ -46,8 +51,8 @@ import javax.swing.UIManager
 class ReviewToolWindowPanel(
     private val project: Project,
 ) : SimpleToolWindowPanel(true, true), Disposable {
-    private val panelBackground = JBColor(Color(0x5B, 0x8F, 0xD9, 0x14), Color(0x5B, 0x8F, 0xD9, 0x10))
-    private val cardBorder = JBColor(Color(0xC7, 0xD8, 0xF2), Color(0x43, 0x4A, 0x57))
+    private val panelBackground = UIManager.getColor("Panel.background") ?: JBColor.PanelBackground
+    private val cardBorder = UIManager.getColor("Component.borderColor") ?: JBColor.border()
     private val manager = ReviewManagerService.getInstance(project)
     private val diffRequestBuilder = DiffRequestBuilder(project)
     private val diffPanel = ReviewDiffPanel(project, this)
@@ -55,7 +60,7 @@ class ReviewToolWindowPanel(
     private val contentPanel = JPanel(BorderLayout())
     private val reviewSelector = JComboBox<Review>()
     private val createReviewButton = RoundedToolbarButton("Create Review")
-    private val deleteReviewButton = RoundedToolbarButton("Delete")
+    private val editReviewButton = RoundedToolbarButton("Edit")
     private var updatingReviewSelector = false
     private val stateListener: () -> Unit = { refreshUi() }
     private val changedFilesByReviewId = mutableMapOf<String, List<ChangedFile>>()
@@ -74,14 +79,14 @@ class ReviewToolWindowPanel(
             }
         }
         createReviewButton.applyCreateReviewStyle().addActionListener { showCreateReviewMenu() }
-        deleteReviewButton.addActionListener {
-            val review = (reviewSelector.selectedItem as? Review) ?: manager.getCurrentReview() ?: return@addActionListener
-            manager.deleteReview(review.id)
-        }
+        editReviewButton.applyToolbarDropdownStyle().addActionListener { showEditReviewMenu() }
 
         changedFilesPanel.onSelectionChanged = { changedFile ->
             manager.selectFile(changedFile?.filePath)
             refreshDiff()
+        }
+        changedFilesPanel.onOpenRequested = { changedFile ->
+            openChangedFile(changedFile)
         }
 
         refreshUi()
@@ -107,7 +112,7 @@ class ReviewToolWindowPanel(
         }
 
         val files = changedFilesByReviewId[review.id].orEmpty()
-        changedFilesPanel.setFiles(files, manager.currentFilePath)
+        changedFilesPanel.setFiles(files, manager.currentFilePath, commentCountsByPath(review))
 
         contentPanel.add(createMainContent(), BorderLayout.CENTER)
         loadChangedFilesIfNeeded(review)
@@ -151,7 +156,7 @@ class ReviewToolWindowPanel(
             override fun onSuccess() {
                 changedFilesByReviewId[review.id] = changedFiles
                 if (requestId == changedFilesLoadSequence.get() && manager.currentReviewId == review.id) {
-                    changedFilesPanel.setFiles(changedFiles, manager.currentFilePath)
+                    changedFilesPanel.setFiles(changedFiles, manager.currentFilePath, commentCountsByPath(review))
                     refreshDiff()
                 }
             }
@@ -184,7 +189,7 @@ class ReviewToolWindowPanel(
         val controls = JPanel(BorderLayout(8, 0)).apply {
             isOpaque = false
             add(reviewSelector, BorderLayout.CENTER)
-            add(deleteReviewButton.applyDestructiveStyle(), BorderLayout.EAST)
+            add(editReviewButton, BorderLayout.EAST)
         }
 
         val primaryActions = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
@@ -214,7 +219,7 @@ class ReviewToolWindowPanel(
             val selected = reviews.firstOrNull { it.id == manager.currentReviewId }
             reviewSelector.selectedItem = selected
             createReviewButton.isEnabled = true
-            deleteReviewButton.isEnabled = selected?.target?.type != ReviewTargetType.UNCOMMITTED
+            editReviewButton.isEnabled = selected != null
         } finally {
             updatingReviewSelector = false
         }
@@ -252,6 +257,127 @@ class ReviewToolWindowPanel(
             .showUnderneathOf(createReviewButton)
     }
 
+    private fun showEditReviewMenu() {
+        val group = DefaultActionGroup().apply {
+            add(object : DumbAwareAction("Rename") {
+                override fun actionPerformed(event: AnActionEvent) {
+                    renameSelectedReview()
+                }
+
+                override fun update(event: AnActionEvent) {
+                    event.presentation.isEnabled = manager.canSaveReview(selectedReview())
+                }
+            })
+            add(object : DumbAwareAction("Save") {
+                override fun actionPerformed(event: AnActionEvent) {
+                    saveSelectedReview()
+                }
+
+                override fun update(event: AnActionEvent) {
+                    event.presentation.isEnabled = manager.canSaveReview(selectedReview())
+                }
+            })
+            add(object : DumbAwareAction("Delete") {
+                override fun actionPerformed(event: AnActionEvent) {
+                    deleteSelectedReview()
+                }
+
+                override fun update(event: AnActionEvent) {
+                    event.presentation.isEnabled = manager.canSaveReview(selectedReview())
+                }
+            })
+            add(object : DumbAwareAction("Load") {
+                override fun actionPerformed(event: AnActionEvent) {
+                    loadReviewFromFile()
+                }
+            })
+        }
+        JBPopupFactory.getInstance()
+            .createActionGroupPopup(
+                null,
+                group,
+                DataManager.getInstance().getDataContext(editReviewButton),
+                JBPopupFactory.ActionSelectionAid.SPEEDSEARCH,
+                true,
+                null,
+                -1,
+                null,
+                ActionPlaces.POPUP,
+            )
+            .showUnderneathOf(editReviewButton)
+    }
+
+    private fun renameSelectedReview() {
+        val review = selectedReview() ?: return
+        val newTitle = Messages.showInputDialog(
+            project,
+            "Review name",
+            "Rename Review",
+            Messages.getQuestionIcon(),
+            review.title,
+            null,
+        ) ?: return
+        manager.renameReview(review.id, newTitle)
+    }
+
+    private fun deleteSelectedReview() {
+        val review = selectedReview() ?: return
+        manager.deleteReview(review.id)
+    }
+
+    private fun saveSelectedReview() {
+        val review = selectedReview() ?: return
+        val newTitle = Messages.showInputDialog(
+            project,
+            "Review name",
+            "Save Review",
+            Messages.getQuestionIcon(),
+            review.title,
+            null,
+        ) ?: return
+        val plan = manager.prepareSaveReview(review.id, newTitle) ?: return
+        if (plan.fileExists) {
+            val overwrite = Messages.showYesNoDialog(
+                project,
+                "Review file already exists:\n${plan.filePath.fileName}\n\nOverwrite it?",
+                "Overwrite Review File",
+                Messages.getWarningIcon(),
+            ) == Messages.YES
+            if (!overwrite) return
+        }
+        object : Task.Backgroundable(project, "Saving review", false) {
+            override fun run(indicator: ProgressIndicator) {
+                manager.saveReviewToFile(plan)
+            }
+        }.queue()
+    }
+
+    private fun loadReviewFromFile() {
+        val rootPath = manager.getCurrentReview()?.repositoryRoot ?: project.basePath ?: return
+        val rootFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(rootPath)
+        val descriptor = FileChooserDescriptorFactory.createSingleFileDescriptor("json").apply {
+            title = "Load Review"
+            description = "Select a saved Local Review JSON file"
+        }
+        FileChooser.chooseFile(descriptor, project, rootFile) { selectedFile ->
+            object : Task.Backgroundable(project, "Loading review", false) {
+                private var errorMessage: String? = null
+
+                override fun run(indicator: ProgressIndicator) {
+                    errorMessage = manager.loadReviewFromFile(java.nio.file.Path.of(selectedFile.path)).error
+                }
+
+                override fun onSuccess() {
+                    errorMessage?.let {
+                        Messages.showErrorDialog(project, it, "Load Review Failed")
+                    }
+                }
+            }.queue()
+        }
+    }
+
+    private fun selectedReview(): Review? = (reviewSelector.selectedItem as? Review) ?: manager.getCurrentReview()
+
     private fun startCommitReview() {
         val dialog = NewReviewDialog(project)
         if (!dialog.showAndGet()) return
@@ -272,6 +398,19 @@ class ReviewToolWindowPanel(
         val review = manager.getCurrentReview() ?: return
         manager.buildAgentPrompt(review.id)?.let { ExportUiSupport.copyToClipboard(project, it) }
     }
+
+    private fun openChangedFile(changedFile: ChangedFile) {
+        val review = manager.getCurrentReview() ?: return
+        ReviewFileNavigator.openChangedFile(project, review.repositoryRoot, changedFile)
+    }
+
+    private fun commentCountsByPath(review: Review): Map<String, FileCommentCounts> =
+        review.comments.groupBy { it.filePath }.mapValues { (_, comments) ->
+            FileCommentCounts(
+                open = comments.count { it.status == CommentStatus.OPEN },
+                resolved = comments.count { it.status != CommentStatus.OPEN },
+            )
+        }
 
     private fun runReviewCreationTask(title: String, action: () -> Unit) {
         object : Task.Backgroundable(project, title, false) {
@@ -300,7 +439,12 @@ private class ReviewSelectorRenderer : ListCellRenderer<Review> {
         if (component is javax.swing.JLabel) {
             component.text = value?.let {
                 val openCount = it.comments.count { comment -> comment.status == CommentStatus.OPEN }
-                "${it.title} · $openCount open"
+                val resolvedCount = it.comments.count { comment -> comment.status != CommentStatus.OPEN }
+                val countText = listOfNotNull(
+                    openCount.takeIf { count -> count > 0 }?.let { count -> "$count Open" },
+                    resolvedCount.takeIf { count -> count > 0 }?.let { count -> "$count Resolved" },
+                ).joinToString(" ")
+                if (countText.isEmpty()) it.title else "${it.title} · $countText"
             } ?: ""
         }
         return component
@@ -308,18 +452,24 @@ private class ReviewSelectorRenderer : ListCellRenderer<Review> {
 }
 
 private fun createCardPanel(): JPanel = JPanel(BorderLayout(12, 0)).apply {
-    background = JBColor(Color(0xF7, 0xFA, 0xFF), Color(0x25, 0x2B, 0x33))
+    background = UIManager.getColor("Panel.background") ?: JBColor.PanelBackground
     isOpaque = true
 }
 
 private fun JButton.applyToolbarActionStyle(): JButton = apply {
-    background = JBColor(Color(0xEAF1FC), Color(0x303847))
-    foreground = JBColor(Color(0x274E86), Color(0xC2D8FF))
+    background = UIManager.getColor("Button.background") ?: JBColor.background()
+    foreground = UIManager.getColor("Button.foreground") ?: JBColor.foreground()
     border = JBUI.Borders.empty(8, 16)
     isOpaque = false
     isContentAreaFilled = false
     isFocusPainted = false
-    putClientProperty(ROUNDED_BUTTON_BORDER_COLOR, JBColor(Color(0xB8CAE6), Color(0x4C5A70)))
+    putClientProperty(ROUNDED_BUTTON_BORDER_COLOR, UIManager.getColor("Component.borderColor") ?: JBColor.border())
+}
+
+private fun JButton.applyToolbarDropdownStyle(): JButton = applyToolbarActionStyle().apply {
+    icon = AllIcons.General.ArrowDown
+    horizontalTextPosition = SwingConstants.LEFT
+    iconTextGap = JBUI.scale(8)
 }
 
 private fun JButton.applyCreateReviewStyle(): JButton = apply {
@@ -332,17 +482,7 @@ private fun JButton.applyCreateReviewStyle(): JButton = apply {
     isOpaque = false
     isContentAreaFilled = false
     isFocusPainted = false
-    putClientProperty(ROUNDED_BUTTON_BORDER_COLOR, JBColor(Color(0x22, 0x83, 0x3E), Color(0x22, 0x83, 0x3E)))
-}
-
-private fun JButton.applyDestructiveStyle(): JButton = apply {
-    background = JBColor(Color(0xFB, 0xE9, 0xE7), Color(0x3A, 0x25, 0x25))
-    foreground = JBColor(Color(0xB4, 0x23, 0x18), Color(0xFF, 0xA1, 0x9A))
-    border = JBUI.Borders.empty(8, 16)
-    isOpaque = false
-    isContentAreaFilled = false
-    isFocusPainted = false
-    putClientProperty(ROUNDED_BUTTON_BORDER_COLOR, JBColor(Color(0xEA, 0xC1, 0xBD), Color(0x6A, 0x3F, 0x3F)))
+    putClientProperty(ROUNDED_BUTTON_BORDER_COLOR, JBColor(Color(0x22, 0x83, 0x3E), Color(0x1D, 0x6D, 0x34)))
 }
 
 private const val ROUNDED_BUTTON_BORDER_COLOR = "local.review.roundedButtonBorderColor"

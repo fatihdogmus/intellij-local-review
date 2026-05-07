@@ -4,6 +4,7 @@ import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.progress.DumbProgressIndicator
 import com.intellij.diff.comparison.ComparisonManager
 import com.intellij.diff.comparison.ComparisonPolicy
+import dev.agentreview.intellij.vcs.ChangedFileStatus
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBLabel
@@ -16,6 +17,8 @@ import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
 import java.awt.Font
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
 import javax.swing.JComponent
@@ -28,21 +31,33 @@ class ChangedFilesPanel {
     private val model = javax.swing.DefaultListModel<ChangedFile>()
     private val list = JBList(model)
     private var updatingModel = false
+    private var commentCountsByPath: Map<String, FileCommentCounts> = emptyMap()
     val component: JComponent = JBPanel<JBPanel<*>>(BorderLayout())
 
     var onSelectionChanged: ((ChangedFile?) -> Unit)? = null
+    var onOpenRequested: ((ChangedFile) -> Unit)? = null
 
     init {
-        list.cellRenderer = ChangedFileCellRenderer()
-        list.background = JBColor(Color(0xF7, 0xFA, 0xFF), Color(0x25, 0x2B, 0x33))
-        list.selectionBackground = JBColor(Color(0xDCEBFF), Color(0x2D, 0x4A, 0x73))
-        list.selectionForeground = UIUtil.getLabelForeground()
+        list.cellRenderer = ChangedFileCellRenderer { changedFile -> commentCountsByPath[changedFile.filePath] ?: FileCommentCounts() }
+        list.background = UIManager.getColor("List.background") ?: UIUtil.getListBackground()
+        list.selectionBackground = UIManager.getColor("List.selectionBackground") ?: UIUtil.getListSelectionBackground(true)
+        list.selectionForeground = UIManager.getColor("List.selectionForeground") ?: UIUtil.getListForeground(true, true)
         list.border = JBUI.Borders.empty(8, 10)
         list.addListSelectionListener {
             if (!it.valueIsAdjusting && !updatingModel) {
                 onSelectionChanged?.invoke(list.selectedValue)
             }
         }
+        list.addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) {
+                list.requestFocusInWindow()
+            }
+            override fun mouseClicked(e: MouseEvent) {
+                if (e.clickCount == 2) {
+                    list.selectedValue?.takeIf { it.status != ChangedFileStatus.DELETED }?.let { onOpenRequested?.invoke(it) }
+                }
+            }
+        })
         component.preferredSize = Dimension(JBUI.scale(280), JBUI.scale(260))
         component.minimumSize = Dimension(JBUI.scale(220), JBUI.scale(180))
         component.background = list.background
@@ -57,9 +72,10 @@ class ChangedFilesPanel {
         }, BorderLayout.CENTER)
     }
 
-    fun setFiles(files: List<ChangedFile>, selectedFilePath: String?) {
+    fun setFiles(files: List<ChangedFile>, selectedFilePath: String?, commentCountsByPath: Map<String, FileCommentCounts>) {
         updatingModel = true
         try {
+            this.commentCountsByPath = commentCountsByPath
             model.removeAllElements()
             files.forEach(model::addElement)
             val selectedIndex = files.indexOfFirst { it.filePath == selectedFilePath }
@@ -76,17 +92,27 @@ class ChangedFilesPanel {
     fun selectedFile(): ChangedFile? = list.selectedValue
 }
 
-private class ChangedFileCellRenderer : ListCellRenderer<ChangedFile> {
+data class FileCommentCounts(
+    val open: Int = 0,
+    val resolved: Int = 0,
+)
+
+private class ChangedFileCellRenderer(
+    private val commentCountsProvider: (ChangedFile) -> FileCommentCounts,
+) : ListCellRenderer<ChangedFile> {
     private val addedColor = JBColor(0x1A7F37, 0x3FB950)
     private val deletedColor = JBColor(0xCF222E, 0xF85149)
+    private val openCommentColor = JBColor(0xB07A00, 0xF2CC60)
+    private val resolvedCommentColor = JBColor(0x1A7F37, 0x7EE787)
     private val modifiedBadgeBg = JBColor(0xE9EEF8, 0x313A48)
     private val addedBadgeBg = JBColor(0xE7F6EC, 0x243B2D)
     private val deletedBadgeBg = JBColor(0xFBE9E7, 0x3A2525)
-    private val selectedRowBg = JBColor(Color(0xDCEBFF), Color(0x2D, 0x4A, 0x73))
-    private val selectedRowBorder = JBColor(Color(0x9E, 0xBF, 0xEA), Color(0x4F, 0x78, 0xA8))
-    private val rowBorder = JBColor(Color(0xD8, 0xE3, 0xF2), Color(0x32, 0x39, 0x44))
+    private val selectedRowBg = UIManager.getColor("List.selectionBackground") ?: JBColor(Color(0xDCEBFF), Color(0x2D, 0x4A, 0x73))
+    private val selectedRowBorder = UIManager.getColor("Component.focusColor") ?: JBColor(Color(0x9E, 0xBF, 0xEA), Color(0x4F, 0x78, 0xA8))
+    private val rowBorder = UIManager.getColor("Component.borderColor") ?: JBColor(Color(0xD8, 0xE3, 0xF2), Color(0x32, 0x39, 0x44))
     private val title = JBLabel()
     private val stats = JBLabel()
+    private val commentStats = JBLabel()
     private val subtitle = JBLabel()
     private val statusBadge = JBLabel().apply {
         border = JBUI.Borders.empty(2, 6)
@@ -114,13 +140,17 @@ private class ChangedFileCellRenderer : ListCellRenderer<ChangedFile> {
             border = JBUI.Borders.emptyTop(4)
             alignmentX = 0.0f
         })
+        add(commentStats.apply {
+            border = JBUI.Borders.emptyTop(3)
+            alignmentX = 0.0f
+        })
     }
     private val panel = JPanel(BorderLayout()).apply {
         add(content, BorderLayout.CENTER)
     }
 
     init {
-        subtitle.foreground = UIManager.getColor("Label.disabledForeground")
+        subtitle.foreground = JBColor(Color(0x4B, 0x63, 0x82), Color(0xF5, 0xF7, 0xFA))
         stats.font = stats.font.deriveFont(stats.font.size2D - 1f)
         subtitle.font = subtitle.font.deriveFont(subtitle.font.size2D - 1f)
         statusBadge.foreground = JBColor(0x355070, 0xB7D1FF)
@@ -159,6 +189,17 @@ private class ChangedFileCellRenderer : ListCellRenderer<ChangedFile> {
         }
         stats.foreground = foreground
 
+        val commentCounts = commentCountsProvider(value)
+        commentStats.text = if (commentCounts.open == 0 && commentCounts.resolved == 0) {
+            ""
+        } else if (isSelected) {
+            "${commentCounts.open} open  ${commentCounts.resolved} resolved"
+        } else {
+            "<html><span style='color:${colorHex(openCommentColor)}'>${commentCounts.open} open</span>&nbsp;&nbsp;<span style='color:${colorHex(resolvedCommentColor)}'>${commentCounts.resolved} resolved</span></html>"
+        }
+        commentStats.foreground = foreground
+        commentStats.isVisible = commentStats.text.isNotBlank()
+
         subtitle.text = buildSubtitle(value)
         subtitle.isVisible = subtitle.text.isNotBlank()
 
@@ -167,6 +208,7 @@ private class ChangedFileCellRenderer : ListCellRenderer<ChangedFile> {
         content.background = rowBackground
         title.background = rowBackground
         subtitle.background = rowBackground
+        commentStats.background = rowBackground
         titleRow.background = rowBackground
 
         panel.border = BorderFactory.createEmptyBorder(0, 0, 8, 0)

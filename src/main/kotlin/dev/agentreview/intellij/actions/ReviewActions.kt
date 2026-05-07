@@ -11,11 +11,13 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.util.containers.ContainerUtil
 import com.intellij.vcs.log.VcsLogCommitSelection
 import com.intellij.vcs.log.VcsLogDataKeys
+import dev.agentreview.intellij.ReviewFileNavigator
 import dev.agentreview.intellij.ReviewManagerService
 import dev.agentreview.intellij.diff.REVIEW_DIFF_EDITOR_KEY
 import dev.agentreview.intellij.export.ExportUiSupport
 import dev.agentreview.intellij.ui.NewReviewDialog
 import dev.agentreview.intellij.ui.showInlineCommentForm
+import dev.agentreview.intellij.vcs.ChangedFileStatus
 
 class StartUncommittedReviewAction : DumbAwareAction() {
     override fun actionPerformed(event: AnActionEvent) {
@@ -110,6 +112,22 @@ class CopyAgentPromptAction : DumbAwareAction() {
     override fun update(event: AnActionEvent) {
         val project = event.project
         event.presentation.isEnabled = project != null && ReviewManagerService.getInstance(project).getCurrentReview() != null
+    }
+}
+
+class OpenReviewedFileAction : DumbAwareAction() {
+    override fun actionPerformed(event: AnActionEvent) {
+        val project = event.project ?: return
+        val editor = event.getData(CommonDataKeys.EDITOR) as? EditorEx ?: return
+        val requestData = editor.getUserData(REVIEW_DIFF_EDITOR_KEY) ?: return
+        ReviewFileNavigator.openChangedFile(project, ReviewManagerService.getInstance(project).findReview(requestData.reviewId)?.repositoryRoot ?: return, requestData.changedFile)
+    }
+
+    override fun update(event: AnActionEvent) {
+        val project = event.project
+        val editor = event.getData(CommonDataKeys.EDITOR) as? EditorEx
+        val requestData = editor?.getUserData(REVIEW_DIFF_EDITOR_KEY)
+        event.presentation.isEnabledAndVisible = project != null && requestData != null && requestData.changedFile.status != ChangedFileStatus.DELETED
     }
 }
 
