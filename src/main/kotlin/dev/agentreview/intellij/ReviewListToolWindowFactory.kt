@@ -3,9 +3,6 @@ package dev.agentreview.intellij
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
-import com.intellij.openapi.wm.ToolWindow
-import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.ui.content.ContentFactory
 import dev.agentreview.intellij.ui.ReviewListPanel
 
 class ReviewListToolWindowPanel(project: Project) : SimpleToolWindowPanel(true, true), Disposable {
@@ -34,13 +31,3 @@ class ReviewListToolWindowPanel(project: Project) : SimpleToolWindowPanel(true, 
     }
 }
 
-class ReviewListToolWindowFactory : ToolWindowFactory {
-    override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val panel = ReviewListToolWindowPanel(project)
-        val content = ContentFactory.getInstance().createContent(panel, null, false)
-        content.setDisposer(panel)
-        toolWindow.contentManager.addContent(content)
-    }
-
-    override fun shouldBeAvailable(project: Project): Boolean = true
-}

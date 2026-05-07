@@ -10,43 +10,47 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.vcs</depends>
     <depends>Git4Idea</depends>
+    <depends>com.intellij.mcpServer</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow
-            id="Review"
-            anchor="left"
-            factoryClass="dev.agentreview.intellij.ReviewToolWindowFactory"
-            icon="/icons/review.svg"/>
         <diff.DiffExtension implementation="dev.agentreview.intellij.diff.ReviewDiffExtension"/>
+        <fileEditorProvider implementation="dev.agentreview.intellij.editor.ReviewPageEditorProvider"/>
+        <mcpServer.mcpToolset implementation="dev.agentreview.intellij.mcp.ReviewMcpToolset"/>
+        <toolWindow id="Review" anchor="left" secondary="true" factoryClass="dev.agentreview.intellij.ReviewStripeToolWindowFactory"/>
     </extensions>
 
     <actions>
-        <group id="LocalReview.Actions" text="Local Review" popup="true">
+        <action
+            id="LocalReview.OpenReviewDialog"
+            class="dev.agentreview.intellij.actions.OpenReviewDialogAction"
+            text="Open Review">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
-            <action
-                id="LocalReview.StartUncommittedReview"
-                class="dev.agentreview.intellij.actions.StartUncommittedReviewAction"
-                text="Start Review of Uncommitted Changes"/>
-            <action
-                id="LocalReview.StartReviewFromGitLog"
-                class="dev.agentreview.intellij.actions.StartReviewFromGitLogAction"
-                text="Start Review from Selected Commit(s)">
-                <add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
-            </action>
-            <action
-                id="LocalReview.StartReviewFromCommitHash"
-                class="dev.agentreview.intellij.actions.StartReviewFromCommitHashAction"
-                text="Start Review from Commit Picker..."/>
-            <action
-                id="LocalReview.AddComment"
-                class="dev.agentreview.intellij.actions.AddReviewCommentAction"
-                text="Add Review Comment">
-                <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
-            </action>
-            <action
-                id="LocalReview.CopyAgentPrompt"
-                class="dev.agentreview.intellij.actions.CopyAgentPromptAction"
-                text="Copy Prompt"/>
-        </group>
+            <keyboard-shortcut keymap="$default" first-keystroke="shift alt P"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift P"/>
+        </action>
+        <action
+            id="LocalReview.StartUncommittedReview"
+            class="dev.agentreview.intellij.actions.StartUncommittedReviewAction"
+            text="Start Review of Uncommitted Changes"/>
+        <action
+            id="LocalReview.StartReviewFromGitLog"
+            class="dev.agentreview.intellij.actions.StartReviewFromGitLogAction"
+            text="Start Review from Selected Commit(s)">
+            <add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
+        </action>
+        <action
+            id="LocalReview.StartReviewFromCommitHash"
+            class="dev.agentreview.intellij.actions.StartReviewFromCommitHashAction"
+            text="Start Review from Commit Picker..."/>
+        <action
+            id="LocalReview.AddComment"
+            class="dev.agentreview.intellij.actions.AddReviewCommentAction"
+            text="Add Review Comment">
+            <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
+        </action>
+        <action
+            id="LocalReview.CopyAgentPrompt"
+            class="dev.agentreview.intellij.actions.CopyAgentPromptAction"
+            text="Copy Prompt"/>
     </actions>
 </idea-plugin>

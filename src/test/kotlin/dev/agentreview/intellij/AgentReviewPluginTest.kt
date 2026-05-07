@@ -1,6 +1,7 @@
 package dev.agentreview.intellij
 
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.testFramework.junit5.TestApplication
+import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.agentreview.intellij.export.AgentPromptBuilder
 import dev.agentreview.intellij.model.CommentAnchor
 import dev.agentreview.intellij.model.CommentSeverity
@@ -12,45 +13,57 @@ import dev.agentreview.intellij.model.ReviewStatus
 import dev.agentreview.intellij.model.ReviewTarget
 import dev.agentreview.intellij.model.ReviewTargetType
 import dev.agentreview.intellij.persistence.ReviewStateService
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
 
-class AgentReviewPluginTest : BasePlatformTestCase() {
-    fun testStateServicePersistsReviewObjects() {
+@TestApplication
+class AgentReviewPluginTest {
+    private val project by projectFixture()
+
+    @Test
+    fun stateServicePersistsReviewObjects() {
         val stateService = ReviewStateService.getInstance(project)
         val review = sampleReview()
 
         stateService.addReview(review)
 
         val stored = stateService.findReview(review.id)
-        assertNotNull(stored)
-        assertEquals("review-1", stored?.id)
-        assertEquals(1, stored?.comments?.size)
-        assertEquals(CommentStatus.OPEN, stored?.comments?.first()?.status)
-        assertEquals(49, stored?.comments?.first()?.anchor?.endNewLine)
+        assertThat(stored).isNotNull
+        assertThat(stored!!.id).isEqualTo("review-1")
+        assertThat(stored.comments).hasSize(1)
+        assertThat(stored.comments.first().status).isEqualTo(CommentStatus.OPEN)
+        assertThat(stored.comments.first().anchor.endNewLine).isEqualTo(49)
     }
 
-    fun testPromptIncludesCommitHashAndComment() {
+    @Test
+    fun promptIncludesCommitHashAndComment() {
         val exported = AgentPromptBuilder().build(sampleReview())
 
-        assertTrue(exported.contains("- Commit Hash: `abc123def456`"))
-        assertTrue(exported.contains("Avoid !! here."))
-        assertTrue(exported.contains("- Status: OPEN"))
+        assertThat(exported)
+            .contains("- Commit Hash: `abc123def456`")
+            .contains("Avoid !! here.")
+            .contains("- Status: OPEN")
     }
 
-    fun testPromptIncludesReadableTopLevelSections() {
+    @Test
+    fun promptIncludesReadableTopLevelSections() {
         val exported = AgentPromptBuilder().build(sampleReview())
 
-        assertTrue(exported.contains("# Local Review"))
-        assertTrue(exported.contains("## Instructions"))
-        assertTrue(exported.contains("## Review"))
-        assertTrue(exported.contains("## Open Comments"))
+        assertThat(exported)
+            .contains("# Local Review")
+            .contains("## Instructions")
+            .contains("## Review")
+            .contains("## Open Comments")
     }
 
-    fun testPromptIncludesMultiLineAnchorDetails() {
+    @Test
+    fun promptIncludesMultiLineAnchorDetails() {
         val exported = AgentPromptBuilder().build(sampleReview())
 
-        assertTrue(exported.contains("- Lines: 47-49"))
-        assertTrue(exported.contains("**Selected Text**"))
-        assertTrue(exported.contains("repo.find(id)!!\nreturn user\n}"))
+        assertThat(exported)
+            .contains("- Lines: 47-49")
+            .contains("**Selected Text**")
+            .contains("repo.find(id)!!\nreturn user\n}")
     }
 
     private fun sampleReview(): Review = Review(

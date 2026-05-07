@@ -1,33 +1,40 @@
 # MCP Agent Usage
 
-Current build ships core review workflow first.
+Current build ships MCP review access through JetBrains bundled MCP Server.
 
 ## Available Now
 
 - Create review for uncommitted changes.
 - Create review from commit hash.
 - Persist comments in workspace state.
-- Export review JSON.
-- Copy agent prompt with JSON payload.
+- Copy agent prompt with Markdown payload.
+- MCP tools:
+  - `review_list_reviews`
+  - `review_get_review`
+  - `review_list_unresolved_comments`
+  - `review_get_comment_context`
+  - `review_mark_comment_addressed`
+  - `review_mark_comment_resolved` (returns disabled by default)
+  - `review_export`
 
-## Temporary Agent Workflow
+## Agent Workflow
 
 1. Create review in `Review` tool window.
 2. Add comments.
-3. Use `Copy Agent Prompt` or `Export JSON`.
-4. Give prompt or JSON to coding agent.
-5. After code changes, mark comments `ADDRESSED` or `RESOLVED` in UI.
+3. Agent calls review MCP tools against current project.
+4. Agent implements requested changes.
+5. Agent marks implemented comments `ADDRESSED` through MCP.
+6. Human reviews and marks comments `RESOLVED` in UI if desired.
 
 ## MCP Status
 
 JetBrains bundled MCP Server exists in IntelliJ IDEA 2025.2+.
 
-Custom tool registration API still not wired in this codebase. Research done against JetBrains MCP docs and deprecated `mcp-server-plugin` README. Next step: inspect bundled MCP plugin extension point classes and register tools for:
+This plugin now registers custom review tools through `com.intellij.mcpServer.mcpToolset`.
 
-- `review_list_reviews`
-- `review_get_review`
-- `review_list_unresolved_comments`
-- `review_get_comment_context`
-- `review_mark_comment_addressed`
-- `review_mark_comment_resolved`
-- `review_export`
+Current behavior:
+
+- Review read tools are available directly to MCP clients.
+- `review_mark_comment_addressed` updates stored comment state and agent metadata.
+- `review_mark_comment_resolved` stays disabled by default and returns guidance to use `ADDRESSED` instead.
+- Review export supports `markdown` and `json`.

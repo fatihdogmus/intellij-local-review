@@ -14,18 +14,18 @@ import dev.agentreview.intellij.model.ReviewTargetType
 import dev.agentreview.intellij.vcs.ChangedFile
 import dev.agentreview.intellij.vcs.ChangedFileStatus
 import dev.agentreview.intellij.vcs.ReviewContent
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
 
 class ReviewUnitTest {
     @Test
     fun promptBuilderIncludesDefaultsAndCommentPayload() {
         val exported = AgentPromptBuilder().build(sampleReview())
 
-        assertTrue(exported.contains("### Comment 1"))
-        assertTrue(exported.contains("- Severity: MUST_FIX"))
-        assertTrue(exported.contains("**Selected Text**"))
+        assertThat(exported)
+            .contains("### Comment 1")
+            .contains("- Severity: MUST_FIX")
+            .contains("**Selected Text**")
     }
 
     @Test
@@ -34,9 +34,10 @@ class ReviewUnitTest {
 
         val exported = AgentPromptBuilder().build(review)
 
-        assertTrue(exported.contains("Use <safe> & clear"))
-        assertTrue(exported.contains("- Status: OPEN"))
-        assertTrue(exported.contains("- Repository Root: `/tmp/repo`"))
+        assertThat(exported)
+            .contains("Use <safe> & clear")
+            .contains("- Status: OPEN")
+            .contains("- Repository Root: `/tmp/repo`")
     }
 
     @Test
@@ -58,11 +59,11 @@ class ReviewUnitTest {
             endLineNumber = 4,
         )
 
-        assertEquals(2, anchor.newLine)
-        assertEquals(4, anchor.endNewLine)
-        assertEquals("two\nthree\nfour", anchor.selectedText)
-        assertEquals(listOf("one"), anchor.beforeContext)
-        assertEquals(listOf("five"), anchor.afterContext)
+        assertThat(anchor.newLine).isEqualTo(2)
+        assertThat(anchor.endNewLine).isEqualTo(4)
+        assertThat(anchor.selectedText).isEqualTo("two\nthree\nfour")
+        assertThat(anchor.beforeContext).containsExactly("one")
+        assertThat(anchor.afterContext).containsExactly("five")
     }
 
     private fun sampleReview(): Review = Review(

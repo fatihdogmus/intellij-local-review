@@ -53,9 +53,6 @@ class ReviewListPanel {
         component.add(JBScrollPane(list), BorderLayout.CENTER)
     }
 
-    val preferredFocusableComponent: JComponent
-        get() = list
-
     fun setReviews(reviews: List<Review>, selectedReviewId: String?) {
         updatingModel = true
         try {

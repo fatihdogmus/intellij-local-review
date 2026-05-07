@@ -72,8 +72,6 @@ data class AgentMetadata(
 @Serializable
 enum class ReviewStatus {
     OPEN,
-    CLOSED,
-    ARCHIVED,
 }
 
 @Serializable
@@ -82,14 +80,11 @@ enum class CommentStatus {
     ADDRESSED,
     RESOLVED,
     WONT_FIX,
-    STALE,
 }
 
 @Serializable
 enum class CommentSeverity {
     NOTE,
-    QUESTION,
-    SHOULD_FIX,
     MUST_FIX,
 }
 

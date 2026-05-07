@@ -10,13 +10,13 @@ Local PR-like review workflow for IntelliJ IDEA.
 - Browse changed files and embedded IntelliJ diff.
 - Add persistent file/line review comments.
 - Mark comments `OPEN`, `ADDRESSED`, `RESOLVED`, `WONT_FIX`.
-- Export review as JSON or XML.
-- Copy agent prompt with embedded review JSON.
+- Copy agent prompt with embedded review context.
+- MCP tools for listing reviews, reading comments, exporting review data, and marking comments `ADDRESSED`.
 
 ## Current Gaps
 
 - Git Log selected-commit integration still falls back to commit-hash flow.
-- MCP custom tools not wired yet.
+- Agent comment resolve through MCP is intentionally disabled by default.
 - Comment anchoring uses manual line entry for MVP.
 - Multi-commit range review not implemented.
 

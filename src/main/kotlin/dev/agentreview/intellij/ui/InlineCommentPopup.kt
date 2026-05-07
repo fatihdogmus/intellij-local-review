@@ -23,6 +23,9 @@ import java.awt.Color
 import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.RenderingHints
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.awt.event.KeyEvent
@@ -39,9 +42,11 @@ import javax.swing.JScrollPane
 import javax.swing.KeyStroke
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
+import javax.swing.border.AbstractBorder
 
 private const val PLACEHOLDER_TEXT = "Add comment"
 private const val COMMENT_ACTIONS_PLACE = "LocalReview.CommentActions"
+private const val COMMENT_CARD_ARC = 18
 private val BLUE_BORDER = JBColor(Color(0x35, 0x7A, 0xB8), Color(0x35, 0x7A, 0xB8))
 private val COMMENT_BORDER = JBColor(Color(0x4B, 0x55, 0x63), Color(0x4B, 0x55, 0x63))
 private val DELETE_RED = JBColor(Color(0xC4, 0x2B, 0x1C), Color(0xFF, 0x8E, 0x8A))
@@ -221,7 +226,7 @@ private class ExistingCommentPanel(
         isOpaque = true
         background = normalBackground
         border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(COMMENT_BORDER, 1),
+            RoundedLineBorder(COMMENT_BORDER, COMMENT_CARD_ARC),
             BorderFactory.createEmptyBorder(8, 12, 8, 12),
         )
 
@@ -350,6 +355,29 @@ private class ExistingCommentPanel(
                 }
             })
         }
+    }
+}
+
+private class RoundedLineBorder(
+    private val color: Color,
+    private val arc: Int,
+) : AbstractBorder() {
+    override fun paintBorder(c: java.awt.Component, g: Graphics, x: Int, y: Int, width: Int, height: Int) {
+        val g2 = g.create() as Graphics2D
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.color = color
+            g2.drawRoundRect(x, y, width - 1, height - 1, arc, arc)
+        } finally {
+            g2.dispose()
+        }
+    }
+
+    override fun getBorderInsets(c: java.awt.Component?) = java.awt.Insets(1, 1, 1, 1)
+
+    override fun getBorderInsets(c: java.awt.Component?, insets: java.awt.Insets): java.awt.Insets {
+        insets.set(1, 1, 1, 1)
+        return insets
     }
 }
 

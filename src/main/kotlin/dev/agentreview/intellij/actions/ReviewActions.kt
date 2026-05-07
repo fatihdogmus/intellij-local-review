@@ -11,6 +11,7 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.util.containers.ContainerUtil
 import com.intellij.vcs.log.VcsLogCommitSelection
 import com.intellij.vcs.log.VcsLogDataKeys
+import dev.agentreview.intellij.editor.ReviewPageManager
 import dev.agentreview.intellij.ReviewManagerService
 import dev.agentreview.intellij.diff.REVIEW_DIFF_EDITOR_KEY
 import dev.agentreview.intellij.export.ExportUiSupport
@@ -106,7 +107,19 @@ class CopyAgentPromptAction : DumbAwareAction() {
         val project = event.project ?: return
         val manager = ReviewManagerService.getInstance(project)
         val review = manager.getCurrentReview() ?: return
-        ExportUiSupport.copyToClipboard(manager.buildAgentPrompt(review.id))
+        manager.buildAgentPrompt(review.id)?.let(ExportUiSupport::copyToClipboard)
+    }
+
+    override fun update(event: AnActionEvent) {
+        val project = event.project
+        event.presentation.isEnabled = project != null && ReviewManagerService.getInstance(project).getCurrentReview() != null
+    }
+}
+
+class OpenReviewDialogAction : DumbAwareAction() {
+    override fun actionPerformed(event: AnActionEvent) {
+        val project = event.project ?: return
+        ReviewPageManager.getInstance(project).open()
     }
 }
 

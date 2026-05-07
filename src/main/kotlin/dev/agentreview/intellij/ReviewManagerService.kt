@@ -6,7 +6,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.ChangeListListener
-import com.intellij.openapi.wm.ToolWindowManager
+import dev.agentreview.intellij.editor.ReviewPageManager
 import dev.agentreview.intellij.diff.DiffContextExtractor
 import dev.agentreview.intellij.export.AgentPromptBuilder
 import dev.agentreview.intellij.model.AgentMetadata
@@ -60,7 +60,15 @@ class ReviewManagerService(private val project: Project) {
         .sortedByDescending { it.updatedAt }
         .toList()
 
-    fun getCurrentReview(): Review? = currentReviewId?.let { stateService.findReview(it) }
+    fun getCurrentReview(): Review? {
+        val reviewId = currentReviewId ?: return null
+        val review = stateService.findReview(reviewId)
+        if (review == null) {
+            currentReviewId = null
+            currentFilePath = null
+        }
+        return review
+    }
 
     fun findReview(reviewId: String): Review? = stateService.findReview(reviewId)
 
@@ -194,20 +202,6 @@ class ReviewManagerService(private val project: Project) {
 
     fun markCommentResolved(commentId: String) = setCommentStatus(commentId, CommentStatus.RESOLVED)
 
-    fun reopenComment(commentId: String) = setCommentStatus(commentId, CommentStatus.OPEN)
-
-    fun markCommentWontFix(commentId: String) = setCommentStatus(commentId, CommentStatus.WONT_FIX)
-
-    fun commentsForCurrentSelection(): List<ReviewComment> {
-        val review = getCurrentReview() ?: return emptyList()
-        val selectedFile = currentFilePath
-        return review.comments
-            .asSequence()
-            .filter { selectedFile == null || it.filePath == selectedFile }
-            .sortedWith(compareBy({ it.filePath }, { it.anchor.newLine ?: it.anchor.oldLine ?: Int.MAX_VALUE }, { it.createdAt }))
-            .toList()
-    }
-
     fun commentsForFile(reviewId: String, filePath: String): List<ReviewComment> =
         findReview(reviewId)
             ?.comments
@@ -217,7 +211,9 @@ class ReviewManagerService(private val project: Project) {
             ?.toList()
             .orEmpty()
 
-    fun buildAgentPrompt(reviewId: String): String = AgentPromptBuilder().build(findReview(reviewId) ?: error("Review not found"))
+    fun findCommentWithReview(commentId: String): Pair<Review, ReviewComment>? = findComment(commentId)
+
+    fun buildAgentPrompt(reviewId: String): String? = findReview(reviewId)?.let { AgentPromptBuilder().build(it) }
 
     fun confirmDelete(review: Review): Boolean = Messages.showYesNoDialog(
         project,
@@ -237,11 +233,13 @@ class ReviewManagerService(private val project: Project) {
     fun openReview(reviewId: String) {
         currentReviewId = reviewId
         currentFilePath = null
-        ToolWindowManager.getInstance(project).invokeLater {
-            ToolWindowManager.getInstance(project).getToolWindow("Review")?.let { toolWindow ->
-                toolWindow.show {
-                    expandReviewToolWindow(project, toolWindow)
-                }
+        if (ApplicationManager.getApplication().isUnitTestMode) {
+            notifyChanged()
+            return
+        }
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed) {
+                ReviewPageManager.getInstance(project).open()
             }
             notifyChanged()
         }

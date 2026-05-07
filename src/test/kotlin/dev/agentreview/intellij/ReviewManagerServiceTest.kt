@@ -1,6 +1,7 @@
 package dev.agentreview.intellij
 
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.testFramework.junit5.TestApplication
+import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.agentreview.intellij.model.CommentSeverity
 import dev.agentreview.intellij.model.DiffSide
 import dev.agentreview.intellij.model.Review
@@ -10,9 +11,15 @@ import dev.agentreview.intellij.persistence.ReviewStateService
 import dev.agentreview.intellij.vcs.ChangedFile
 import dev.agentreview.intellij.vcs.ChangedFileStatus
 import dev.agentreview.intellij.vcs.ReviewContent
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
 
-class ReviewManagerServiceTest : BasePlatformTestCase() {
-    fun testAddCommentUsesDefaultSeverityAndMultiLineAnchor() {
+@TestApplication
+class ReviewManagerServiceTest {
+    private val project by projectFixture()
+
+    @Test
+    fun addCommentUsesDefaultSeverityAndMultiLineAnchor() {
         val manager = ReviewManagerService.getInstance(project)
         val review = seededReview("default-severity")
         ReviewStateService.getInstance(project).addReview(review)
@@ -27,16 +34,17 @@ class ReviewManagerServiceTest : BasePlatformTestCase() {
         )
 
         val comment = manager.findReview(review.id)?.comments?.single()
-        assertNotNull(comment)
-        assertEquals(CommentSeverity.NOTE, comment?.severity)
-        assertEquals(2, comment?.anchor?.newLine)
-        assertEquals(3, comment?.anchor?.endNewLine)
-        assertEquals("two\nthree", comment?.anchor?.selectedText)
-        assertEquals(listOf("one"), comment?.anchor?.beforeContext)
-        assertEquals(listOf("four"), comment?.anchor?.afterContext)
+        assertThat(comment).isNotNull
+        assertThat(comment!!.severity).isEqualTo(CommentSeverity.NOTE)
+        assertThat(comment.anchor.newLine).isEqualTo(2)
+        assertThat(comment.anchor.endNewLine).isEqualTo(3)
+        assertThat(comment.anchor.selectedText).isEqualTo("two\nthree")
+        assertThat(comment.anchor.beforeContext).containsExactly("one")
+        assertThat(comment.anchor.afterContext).containsExactly("four")
     }
 
-    fun testCommentsForFileAndDeleteComment() {
+    @Test
+    fun commentsForFileAndDeleteComment() {
         val manager = ReviewManagerService.getInstance(project)
         val review = seededReview("delete-comment")
         ReviewStateService.getInstance(project).addReview(review)
@@ -45,17 +53,17 @@ class ReviewManagerServiceTest : BasePlatformTestCase() {
         manager.addComment(review.id, sampleChangedFile("src/Bar.kt"), DiffSide.RIGHT, 2, "bar")
 
         val fooComments = manager.commentsForFile(review.id, "src/Foo.kt")
-        assertEquals(1, fooComments.size)
-        assertEquals("foo", fooComments.single().body)
+        assertThat(fooComments).singleElement().extracting("body").isEqualTo("foo")
 
         manager.deleteComment(fooComments.single().id)
 
-        assertEmpty(manager.commentsForFile(review.id, "src/Foo.kt"))
-        assertEquals(1, manager.findReview(review.id)?.comments?.size)
-        assertEquals("bar", manager.findReview(review.id)?.comments?.single()?.body)
+        assertThat(manager.commentsForFile(review.id, "src/Foo.kt")).isEmpty()
+        assertThat(manager.findReview(review.id)?.comments).hasSize(1)
+        assertThat(manager.findReview(review.id)?.comments?.single()?.body).isEqualTo("bar")
     }
 
-    fun testCreateUncommittedReviewReusesExistingOne() {
+    @Test
+    fun createUncommittedReviewReusesExistingOne() {
         val manager = ReviewManagerService.getInstance(project)
         manager.hasUncommittedChangesSupplier = { true }
         manager.uncommittedChangesLoader = { listOf(sampleChangedFile("src/Foo.kt")) }
@@ -64,12 +72,13 @@ class ReviewManagerServiceTest : BasePlatformTestCase() {
         val first = manager.createUncommittedReview()
         val second = manager.createUncommittedReview()
 
-        assertNotNull(first)
-        assertEquals(first?.id, second?.id)
-        assertEquals(1, manager.listReviews().count { it.target.type == ReviewTargetType.UNCOMMITTED })
+        assertThat(first).isNotNull
+        assertThat(second?.id).isEqualTo(first?.id)
+        assertThat(manager.listReviews().count { it.target.type == ReviewTargetType.UNCOMMITTED }).isEqualTo(1)
     }
 
-    fun testSyncUncommittedReviewStateRemovesReviewWhenChangesGone() {
+    @Test
+    fun syncUncommittedReviewStateRemovesReviewWhenChangesGone() {
         val manager = ReviewManagerService.getInstance(project)
         manager.hasUncommittedChangesSupplier = { false }
         manager.uncommittedChangesLoader = { emptyList() }
@@ -79,9 +88,9 @@ class ReviewManagerServiceTest : BasePlatformTestCase() {
 
         val changed = manager.syncUncommittedReviewState()
 
-        assertTrue(changed)
-        assertNull(manager.findReview(review.id))
-        assertNull(manager.getCurrentReview())
+        assertThat(changed).isTrue()
+        assertThat(manager.findReview(review.id)).isNull()
+        assertThat(manager.getCurrentReview()).isNull()
     }
 
     private fun seededReview(suffix: String): Review = Review(
