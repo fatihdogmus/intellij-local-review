@@ -1,6 +1,6 @@
 <!-- Keep a Changelog guide -> https://keepachangelog.com -->
 
-# intellij-local-review Changelog
+# Agentic Review Changelog
 
 ## [Unreleased]
 ### Added

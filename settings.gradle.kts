@@ -1,6 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.extensions.intellijPlatform
 
-rootProject.name = "Local Review"
+rootProject.name = "Agentic Review"
 
 pluginManagement {
     plugins {

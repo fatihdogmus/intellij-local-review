@@ -2,19 +2,19 @@ package dev.agentreview.intellij
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.fatihdogmus.localreview.model.CommentStatus
-import dev.fatihdogmus.localreview.model.DiffSide
-import dev.fatihdogmus.localreview.model.Review
-import dev.fatihdogmus.localreview.model.ReviewTarget
-import dev.fatihdogmus.localreview.model.ReviewTargetType
-import dev.fatihdogmus.localreview.persistence.ReviewStateService
-import dev.fatihdogmus.localreview.vcs.BranchReviewMetadata
-import dev.fatihdogmus.localreview.vcs.ChangedFile
-import dev.fatihdogmus.localreview.vcs.ChangedFileStatus
-import dev.fatihdogmus.localreview.vcs.ReviewContent
-import dev.fatihdogmus.localreview.ReviewManagerService
-import dev.fatihdogmus.localreview.model.CommentAnchor
-import dev.fatihdogmus.localreview.model.ReviewComment
+import dev.fatihdogmus.agenticreview.model.CommentStatus
+import dev.fatihdogmus.agenticreview.model.DiffSide
+import dev.fatihdogmus.agenticreview.model.Review
+import dev.fatihdogmus.agenticreview.model.ReviewTarget
+import dev.fatihdogmus.agenticreview.model.ReviewTargetType
+import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
+import dev.fatihdogmus.agenticreview.vcs.BranchReviewMetadata
+import dev.fatihdogmus.agenticreview.vcs.ChangedFile
+import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
+import dev.fatihdogmus.agenticreview.vcs.ReviewContent
+import dev.fatihdogmus.agenticreview.ReviewManagerService
+import dev.fatihdogmus.agenticreview.model.CommentAnchor
+import dev.fatihdogmus.agenticreview.model.ReviewComment
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -122,7 +122,7 @@ class ReviewManagerServiceTest {
     @Test
     fun prepareSaveReviewUsesKebabCaseNameAndReviewId() {
         val manager = ReviewManagerService.getInstance(project)
-        val tempDir = Files.createTempDirectory("local-review-save")
+        val tempDir = Files.createTempDirectory("agentic-review-save")
         val review = seededCommitReview("save-plan")
         review.repositoryRoot = tempDir.toString()
         ReviewStateService.getInstance(project).addReview(review)

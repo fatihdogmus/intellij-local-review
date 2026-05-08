@@ -1,6 +1,6 @@
 <idea-plugin>
-    <id>dev.fatihdogmus.localreview</id>
-    <name>Local Review</name>
+    <id>dev.fatihdogmus.agenticreview</id>
+    <name>Agentic Review</name>
     <version>0.0.1</version>
     <vendor>Internal</vendor>
     <description><![CDATA[
@@ -14,39 +14,39 @@
     <depends>com.intellij.mcpServer</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <diff.DiffExtension implementation="dev.fatihdogmus.localreview.diff.ReviewDiffExtension"/>
-        <fileEditorProvider implementation="dev.fatihdogmus.localreview.editor.ReviewPageEditorProvider"/>
-        <postStartupActivity implementation="dev.fatihdogmus.localreview.EnableMcpServerOnStartupActivity"/>
-        <mcpServer.mcpToolset implementation="dev.fatihdogmus.localreview.mcp.ReviewMcpToolset"/>
-        <notificationGroup id="Local Review" displayType="BALLOON" isLogByDefault="false"/>
-        <toolWindow id="Local Review" anchor="left" secondary="true" factoryClass="dev.fatihdogmus.localreview.ReviewStripeToolWindowFactory"/>
+        <diff.DiffExtension implementation="dev.fatihdogmus.agenticreview.diff.ReviewDiffExtension"/>
+        <fileEditorProvider implementation="dev.fatihdogmus.agenticreview.editor.ReviewPageEditorProvider"/>
+        <postStartupActivity implementation="dev.fatihdogmus.agenticreview.EnableMcpServerOnStartupActivity"/>
+        <mcpServer.mcpToolset implementation="dev.fatihdogmus.agenticreview.mcp.ReviewMcpToolset"/>
+        <notificationGroup id="Agentic Review" displayType="BALLOON" isLogByDefault="false"/>
+        <toolWindow id="Agentic Review" anchor="left" secondary="true" factoryClass="dev.fatihdogmus.agenticreview.ReviewStripeToolWindowFactory"/>
     </extensions>
 
     <actions>
         <action
-            id="LocalReview.OpenReviewDialog"
-            class="dev.fatihdogmus.localreview.actions.OpenReviewDialogAction"
-            text="Open Local Review">
+            id="AgenticReview.OpenReviewDialog"
+            class="dev.fatihdogmus.agenticreview.actions.OpenReviewDialogAction"
+            text="Open Agentic Review">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <keyboard-shortcut keymap="$default" first-keystroke="shift alt P"/>
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift P"/>
         </action>
         <action
-            id="LocalReview.StartReviewFromGitLog"
-            class="dev.fatihdogmus.localreview.actions.StartReviewFromGitLogAction"
-            text="Create Local Review">
+            id="AgenticReview.StartReviewFromGitLog"
+            class="dev.fatihdogmus.agenticreview.actions.StartReviewFromGitLogAction"
+            text="Create Agentic Review">
             <add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
             <add-to-group group-id="Vcs.Log.Toolbar.RightCorner" anchor="last"/>
         </action>
         <action
-            id="LocalReview.AddComment"
-            class="dev.fatihdogmus.localreview.actions.AddReviewCommentAction"
+            id="AgenticReview.AddComment"
+            class="dev.fatihdogmus.agenticreview.actions.AddReviewCommentAction"
             text="Add Review Comment">
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
         </action>
         <action
-            id="LocalReview.OpenReviewedFile"
-            class="dev.fatihdogmus.localreview.actions.OpenReviewedFileAction"
+            id="AgenticReview.OpenReviewedFile"
+            class="dev.fatihdogmus.agenticreview.actions.OpenReviewedFileAction"
             text="Go to File">
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
         </action>

@@ -2,16 +2,16 @@ package dev.agentreview.intellij
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.fatihdogmus.localreview.export.AgentPromptBuilder
-import dev.fatihdogmus.localreview.model.CommentAnchor
-import dev.fatihdogmus.localreview.model.CommentStatus
-import dev.fatihdogmus.localreview.model.DiffSide
-import dev.fatihdogmus.localreview.model.Review
-import dev.fatihdogmus.localreview.model.ReviewComment
-import dev.fatihdogmus.localreview.model.ReviewStatus
-import dev.fatihdogmus.localreview.model.ReviewTarget
-import dev.fatihdogmus.localreview.model.ReviewTargetType
-import dev.fatihdogmus.localreview.persistence.ReviewStateService
+import dev.fatihdogmus.agenticreview.export.AgentPromptBuilder
+import dev.fatihdogmus.agenticreview.model.CommentAnchor
+import dev.fatihdogmus.agenticreview.model.CommentStatus
+import dev.fatihdogmus.agenticreview.model.DiffSide
+import dev.fatihdogmus.agenticreview.model.Review
+import dev.fatihdogmus.agenticreview.model.ReviewComment
+import dev.fatihdogmus.agenticreview.model.ReviewStatus
+import dev.fatihdogmus.agenticreview.model.ReviewTarget
+import dev.fatihdogmus.agenticreview.model.ReviewTargetType
+import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
@@ -49,7 +49,7 @@ class AgentReviewPluginTest {
         val exported = AgentPromptBuilder().build(sampleReview())
 
         assertThat(exported)
-            .contains("# Local Review")
+            .contains("# Agentic Review")
             .contains("## Instructions")
             .contains("## Review")
             .contains("## Open Comments")

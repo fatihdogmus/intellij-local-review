@@ -2,14 +2,14 @@ package dev.agentreview.intellij
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.fatihdogmus.localreview.ReviewManagerService
-import dev.fatihdogmus.localreview.model.CommentAnchor
-import dev.fatihdogmus.localreview.model.CommentStatus
-import dev.fatihdogmus.localreview.model.DiffSide
-import dev.fatihdogmus.localreview.model.ReviewComment
-import dev.fatihdogmus.localreview.model.ReviewStatus
-import dev.fatihdogmus.localreview.model.ReviewTargetType
-import dev.fatihdogmus.localreview.persistence.SavedReviewArchive
+import dev.fatihdogmus.agenticreview.ReviewManagerService
+import dev.fatihdogmus.agenticreview.model.CommentAnchor
+import dev.fatihdogmus.agenticreview.model.CommentStatus
+import dev.fatihdogmus.agenticreview.model.DiffSide
+import dev.fatihdogmus.agenticreview.model.ReviewComment
+import dev.fatihdogmus.agenticreview.model.ReviewStatus
+import dev.fatihdogmus.agenticreview.model.ReviewTargetType
+import dev.fatihdogmus.agenticreview.persistence.SavedReviewArchive
 import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -147,7 +147,7 @@ class ReviewImportValidationTest {
     }
 
     private fun configuredManager(): ReviewManagerService = ReviewManagerService.getInstance(project).also { manager ->
-        val tempDir = Files.createTempDirectory("local-review-import-tests")
+        val tempDir = Files.createTempDirectory("agentic-review-import-tests")
         manager.repositoryRootResolver = { tempDir.toString() }
         manager.isCommitReachableOnCurrentBranchSupplier = { true }
     }
@@ -156,7 +156,7 @@ class ReviewImportValidationTest {
         writeRawJson(fileName, json.encodeToString(archive))
 
     private fun writeRawJson(fileName: String, content: String): Path {
-        val tempDir = Files.createTempDirectory("local-review-import-json")
+        val tempDir = Files.createTempDirectory("agentic-review-import-json")
         val file = tempDir.resolve(fileName)
         Files.writeString(file, content)
         return file

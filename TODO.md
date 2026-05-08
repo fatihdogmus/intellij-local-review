@@ -1,8 +1,8 @@
-# Local Review Plugin Status
+# Agentic Review Plugin Status
 
 ## Done
 
-- [x] Replace template plugin setup with `Local Review` plugin metadata and actions.
+- [x] Replace template plugin setup with `Agentic Review` plugin metadata and actions.
 - [x] Add project-level persistent review state service.
 - [x] Add review domain models for reviews, targets, comments, anchors, statuses.
 - [x] Add `Review` tool window and empty state.

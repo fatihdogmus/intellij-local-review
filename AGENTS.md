@@ -21,10 +21,10 @@
 - Review UI is not a normal toolwindow panel anymore: the left stripe `Review` toolwindow is just a launcher, and the actual review page opens as a custom editor tab via `editor/ReviewPageManager.kt` + `ReviewPageEditorProvider`.
 - `ReviewManagerService` is the central project service for review state, selection state, save/load, uncommitted syncing, and prompt export. Start there before changing behavior.
 - Uncommitted review is a singleton workspace review created eagerly in `ReviewManagerService.init` and refreshed from `ChangeListListener`. Do not treat it like a normal deletable review.
-- Saved review archives are written under `<repo>/.local-review/*.json`. Avoid committing that directory.
+- Saved review archives are written under `<repo>/.agentic-review/*.json`. Avoid committing that directory.
 
 ## Review creation flow
-- Commit review selection now uses native IDEA VCS Log only. `Create Review -> Pick in VCS Log...` opens/focuses the main log; the actual review is created from `LocalReview.StartReviewFromGitLog` on the VCS Log context menu / toolbar.
+- Commit review selection now uses native IDEA VCS Log only. `Create Review -> Pick in VCS Log...` opens/focuses the main log; the actual review is created from `AgenticReview.StartReviewFromGitLog` on the VCS Log context menu / toolbar.
 - There is intentionally no embedded VCS Log picker dialog and no Java bridge to internal VCS Log UI factories.
 - Multi-commit reviews are range diffs from the oldest selected commit's first parent to the newest selected commit, with selected commits ordered by commit timestamp (`CommitChangesProvider.getCombinedCommitMetadata`). Non-contiguous selections therefore include the full net range.
 - Branch review compares current branch against local `main`, falling back to local `master`; it is unavailable when already on `main`/`master`.

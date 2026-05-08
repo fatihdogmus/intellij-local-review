@@ -1,6 +1,6 @@
-# Local Review
+# Agentic Review
 
-Local Review is an IntelliJ IDEA plugin for doing lightweight code review inside your local workspace.
+Agentic Review is an IntelliJ IDEA plugin for doing lightweight code review inside your local workspace.
 
 Instead of pushing a branch and waiting for a remote PR, you can open a review for:
 - current uncommitted changes
@@ -12,7 +12,7 @@ The plugin keeps review comments locally, lets you revisit them later, and can e
 
 ## Purpose
 
-Local Review is built for workflows like these:
+Agentic Review is built for workflows like these:
 - review your own work before commit or before push
 - collect review comments while exploring a branch locally
 - hand actionable review comments to an AI coding agent
@@ -32,11 +32,11 @@ Suggested sections:
 
 ## Main Workflow
 
-1. Open `Tools -> Open Review` or use `Alt+Shift+P` / `Cmd+Shift+P`.
+1. Open `Tools -> Open Agentic Review` or use `Alt+Shift+P` / `Cmd+Shift+P`.
 2. Start from one of these review sources:
-   - uncommitted changes
-   - `Create Review -> Pick in VCS Log`
-   - `Create Review -> Branch Review`
+ - uncommitted changes
+ - `Create Agentic Review -> Pick in VCS Log`
+ - `Create Agentic Review -> Branch Review`
 3. Browse changed files and diff them in the review page.
 4. Add inline comments on changed lines.
 5. Mark work as addressed or resolved as review progresses.
@@ -99,7 +99,7 @@ This exposes review data to local coding agents without a separate external serv
 #### Commit review
 
 - `Create Review -> Pick in VCS Log` opens the native IntelliJ VCS Log.
-- In VCS Log, use `Create Local Review` from the context menu or toolbar.
+- In VCS Log, use `Create Agentic Review` from the context menu or toolbar.
 - A single selected commit creates a single-commit review.
 
 #### Multi-commit review
@@ -148,7 +148,7 @@ Current UI behavior emphasizes open work:
 
 ### Save and load
 
-- Reviews can be saved as JSON archives under `.local-review/` inside the repository root.
+- Reviews can be saved as JSON archives under `.agentic-review/` inside the repository root.
 - Saved archives include review metadata and comments.
 - Loading validates structure and commit reachability on the current branch.
 - Loaded reviews get fresh review and comment IDs.
@@ -228,7 +228,7 @@ Run one test class:
 - `README.md` should describe user-facing behavior, but code and Gradle config are the real source of truth.
 - The plugin currently targets `intellijIdea("2026.1.1")` from `build.gradle.kts`.
 - MCP is enabled by default in `runIde` via `-Dlocal.review.enable.mcp.by.default=true`.
-- Saved review artifacts in `.local-review/` are local workspace data and should not be committed.
+- Saved review artifacts in `.agentic-review/` are local workspace data and should not be committed.
 
 ## License
 

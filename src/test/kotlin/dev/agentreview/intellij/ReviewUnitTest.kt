@@ -1,18 +1,18 @@
 package dev.agentreview.intellij
 
-import dev.fatihdogmus.localreview.diff.DiffContextExtractor
-import dev.fatihdogmus.localreview.export.AgentPromptBuilder
-import dev.fatihdogmus.localreview.model.CommentAnchor
-import dev.fatihdogmus.localreview.model.CommentStatus
-import dev.fatihdogmus.localreview.model.DiffSide
-import dev.fatihdogmus.localreview.model.Review
-import dev.fatihdogmus.localreview.model.ReviewComment
-import dev.fatihdogmus.localreview.model.ReviewStatus
-import dev.fatihdogmus.localreview.model.ReviewTarget
-import dev.fatihdogmus.localreview.model.ReviewTargetType
-import dev.fatihdogmus.localreview.vcs.ChangedFile
-import dev.fatihdogmus.localreview.vcs.ChangedFileStatus
-import dev.fatihdogmus.localreview.vcs.ReviewContent
+import dev.fatihdogmus.agenticreview.diff.DiffContextExtractor
+import dev.fatihdogmus.agenticreview.export.AgentPromptBuilder
+import dev.fatihdogmus.agenticreview.model.CommentAnchor
+import dev.fatihdogmus.agenticreview.model.CommentStatus
+import dev.fatihdogmus.agenticreview.model.DiffSide
+import dev.fatihdogmus.agenticreview.model.Review
+import dev.fatihdogmus.agenticreview.model.ReviewComment
+import dev.fatihdogmus.agenticreview.model.ReviewStatus
+import dev.fatihdogmus.agenticreview.model.ReviewTarget
+import dev.fatihdogmus.agenticreview.model.ReviewTargetType
+import dev.fatihdogmus.agenticreview.vcs.ChangedFile
+import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
+import dev.fatihdogmus.agenticreview.vcs.ReviewContent
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
