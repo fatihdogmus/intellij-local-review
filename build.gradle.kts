@@ -9,8 +9,8 @@ plugins {
 }
 
 dependencies {
-    implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.3.0"))
-    testImplementation(platform("org.jetbrains.kotlin:kotlin-bom:2.3.0"))
+    implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.3.21"))
+    testImplementation(platform("org.jetbrains.kotlin:kotlin-bom:2.3.21"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("org.valiktor:valiktor-core:0.12.0")
     testImplementation("org.junit.jupiter:junit-jupiter:5.12.2")
