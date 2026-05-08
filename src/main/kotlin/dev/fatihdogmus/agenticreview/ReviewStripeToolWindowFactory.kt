@@ -1,8 +1,10 @@
 package dev.fatihdogmus.agenticreview
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
@@ -15,15 +17,18 @@ class ReviewStripeToolWindowFactory : ToolWindowFactory, DumbAware {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         if (toolWindow.contentManager.contentCount == 0) {
-            toolWindow.contentManager.addContent(toolWindow.contentManager.factory.createContent(JPanel(), "", false))
-        }
+            val content = toolWindow.contentManager.factory.createContent(JPanel(), "", false)
+            val disposable = Disposable {}
+            content.setDisposer(disposable)
+            toolWindow.contentManager.addContent(content)
 
-        project.messageBus.connect().subscribe(ToolWindowManagerListener.TOPIC, object : ToolWindowManagerListener {
-            override fun toolWindowShown(shownToolWindow: ToolWindow) {
-                if (shownToolWindow.id != toolWindow.id) return
-                openReviewAndHide(project, shownToolWindow)
-            }
-        })
+            project.messageBus.connect(disposable).subscribe(ToolWindowManagerListener.TOPIC, object : ToolWindowManagerListener {
+                override fun toolWindowShown(shownToolWindow: ToolWindow) {
+                    if (shownToolWindow.id != toolWindow.id) return
+                    openReviewAndHide(project, shownToolWindow)
+                }
+            })
+        }
 
         openReviewAndHide(project, toolWindow)
     }

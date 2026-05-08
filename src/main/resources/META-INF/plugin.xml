@@ -4,8 +4,16 @@
     <version>0.0.1</version>
     <vendor>Internal</vendor>
     <description><![CDATA[
-        <p>Local PR-like review workflow for IntelliJ IDEA.</p>
-        <p>Review diffs, add persistent comments, export review data, and hand unresolved comments to coding agents.</p>
+        <p>Agentic Review brings a lightweight, PR-style review workflow into IntelliJ IDEA without requiring a remote pull request.</p>
+        <p>Its goal is to help you review uncommitted work, commits, commit ranges, or branch diffs inside the IDE, keep review comments as local workspace state, and hand unresolved work to coding agents in a structured way.</p>
+        <p><b>How to use it:</b></p>
+        <ul>
+            <li>Open <b>Tools | Open Agentic Review</b> to start from your uncommitted changes.</li>
+            <li>Use <b>Create Agentic Review</b> from the VCS Log to review one or more commits.</li>
+            <li>Browse changed files, inspect diffs, and add inline review comments.</li>
+            <li>Copy the generated agent prompt or use the bundled MCP toolset to pass open comments to an agent for implementation.</li>
+        </ul>
+        <p>Agentic Review is designed for local-first development workflows: self-review before commit, branch review before push, and agent-assisted follow-up on concrete review comments.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

@@ -1,6 +1,7 @@
 package dev.fatihdogmus.agenticreview
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.ChangeListManager
@@ -40,7 +41,7 @@ import java.nio.file.Path
 import java.util.UUID
 
 @Service(Service.Level.PROJECT)
-class ReviewManagerService(private val project: Project) {
+class ReviewManagerService(private val project: Project) : Disposable {
     private val stateService = ReviewStateService.getInstance(project)
     private val diffContextExtractor = DiffContextExtractor()
     private val listeners = mutableSetOf<() -> Unit>()
@@ -57,7 +58,7 @@ class ReviewManagerService(private val project: Project) {
     }
     internal var hasUncommittedChangesSupplier: () -> Boolean = {
         val changeListManager = ChangeListManager.getInstance(project)
-        changeListManager.allChanges.isNotEmpty() || changeListManager.unversionedFilesPaths.isNotEmpty()
+        changeListManager.defaultChangeList.changes.isNotEmpty()
     }
 
     var currentReviewId: String? = null
@@ -67,7 +68,7 @@ class ReviewManagerService(private val project: Project) {
         private set
 
     init {
-        project.messageBus.connect().subscribe(ChangeListListener.TOPIC, object : ChangeListListener {
+        project.messageBus.connect(this).subscribe(ChangeListListener.TOPIC, object : ChangeListListener {
             override fun changeListUpdateDone() {
                 syncUncommittedReviewState()
             }
@@ -363,6 +364,10 @@ class ReviewManagerService(private val project: Project) {
 
     fun removeListener(listener: () -> Unit) {
         listeners.remove(listener)
+    }
+
+    override fun dispose() {
+        listeners.clear()
     }
 
     fun openReview(reviewId: String) {
