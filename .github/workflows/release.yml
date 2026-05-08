@@ -47,9 +47,27 @@ jobs:
       - name: Validate release configuration
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
         run: |
           if [ -z "$PUBLISH_TOKEN" ]; then
             echo "Missing required secret: PUBLISH_TOKEN" >&2
+            exit 1
+          fi
+
+          if [ -z "$PRIVATE_KEY" ]; then
+            echo "Missing required secret: PRIVATE_KEY" >&2
+            exit 1
+          fi
+
+          if [ -z "$PRIVATE_KEY_PASSWORD" ]; then
+            echo "Missing required secret: PRIVATE_KEY_PASSWORD" >&2
+            exit 1
+          fi
+
+          if [ -z "$CERTIFICATE_CHAIN" ]; then
+            echo "Missing required secret: CERTIFICATE_CHAIN" >&2
             exit 1
           fi
 
@@ -129,6 +147,9 @@ jobs:
       - name: Publish Plugin
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
         run: ./gradlew publishPlugin
 
       - name: Commit and push release version

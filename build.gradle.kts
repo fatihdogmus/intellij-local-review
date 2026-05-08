@@ -1,6 +1,8 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.JavaExec
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -30,11 +32,27 @@ dependencies {
 
 kotlin {
     jvmToolchain(21)
+
+    compilerOptions {
+        jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
+    }
 }
 
 intellijPlatform {
     pluginConfiguration {
         version = providers.gradleProperty("version")
+    }
+
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+
+    pluginVerification {
+        ides {
+            create(IntelliJPlatformType.IntellijIdea, "2026.1.1")
+        }
     }
 
     publishing {
