@@ -1,5 +1,7 @@
 package dev.fatihdogmus.agenticreview.vcs
 
+import java.security.MessageDigest
+
 data class ChangedFile(
     val filePath: String,
     val status: ChangedFileStatus,
@@ -30,3 +32,20 @@ data class CommitMetadata(
     val firstParentHash: String?,
     val repositoryRoot: String,
 )
+
+fun ChangedFile.seenKey(): String = listOf(
+    filePath,
+    previousFilePath.orEmpty(),
+    status.name,
+    beforeContent.contentHash(),
+    afterContent.contentHash(),
+).joinToString("|")
+
+private fun ReviewContent?.contentHash(): String = when (this) {
+    null -> "-"
+    else -> text.sha256()
+}
+
+private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
+    .digest(toByteArray())
+    .joinToString("") { "%02x".format(it) }

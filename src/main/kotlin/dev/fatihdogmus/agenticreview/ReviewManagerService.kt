@@ -14,6 +14,7 @@ import dev.fatihdogmus.agenticreview.model.CommentStatus
 import dev.fatihdogmus.agenticreview.model.DiffSide
 import dev.fatihdogmus.agenticreview.model.Review
 import dev.fatihdogmus.agenticreview.model.ReviewComment
+import dev.fatihdogmus.agenticreview.model.SeenFileState
 import dev.fatihdogmus.agenticreview.model.ReviewStatus
 import dev.fatihdogmus.agenticreview.model.ReviewTarget
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
@@ -28,6 +29,7 @@ import dev.fatihdogmus.agenticreview.vcs.BranchReviewMetadata
 import dev.fatihdogmus.agenticreview.vcs.CommitChangesProvider
 import dev.fatihdogmus.agenticreview.vcs.GitCommandFallback
 import dev.fatihdogmus.agenticreview.vcs.GitRepositoryResolver
+import dev.fatihdogmus.agenticreview.vcs.seenKey
 import dev.fatihdogmus.agenticreview.vcs.UncommittedChangesProvider
 import git4idea.repo.GitRepositoryManager
 import kotlinx.serialization.SerializationException
@@ -58,7 +60,7 @@ class ReviewManagerService(private val project: Project) : Disposable {
     }
     internal var hasUncommittedChangesSupplier: () -> Boolean = {
         val changeListManager = ChangeListManager.getInstance(project)
-        changeListManager.defaultChangeList.changes.isNotEmpty()
+        changeListManager.defaultChangeList.changes.isNotEmpty() || changeListManager.unversionedFilesPaths.isNotEmpty()
     }
 
     var currentReviewId: String? = null
@@ -354,6 +356,35 @@ class ReviewManagerService(private val project: Project) : Disposable {
             ?.toList()
             .orEmpty()
 
+    fun seenFileKeys(reviewId: String): Set<String> =
+        findReview(reviewId)?.seenFiles?.asSequence()?.map { it.key }?.toSet().orEmpty()
+
+    fun markFileSeen(reviewId: String, changedFile: ChangedFile): Boolean {
+        val review = findReview(reviewId) ?: return false
+        val key = changedFile.seenKey()
+        if (review.seenFiles.any { it.key == key }) return false
+
+        review.seenFiles.removeIf { it.filePath == changedFile.filePath }
+        review.seenFiles += SeenFileState(
+            key = key,
+            filePath = changedFile.filePath,
+            seenAt = nowIso(),
+        )
+        touch(review)
+        return true
+    }
+
+    internal fun syncSeenFiles(reviewId: String, changedFiles: List<ChangedFile>, notify: Boolean = true): Boolean {
+        val review = findReview(reviewId) ?: return false
+        val activeKeys = changedFiles.asSequence().map { it.seenKey() }.toSet()
+        val removed = review.seenFiles.removeIf { it.key !in activeKeys }
+        if (!removed) return false
+
+        review.updatedAt = nowIso()
+        if (notify) notifyChanged()
+        return true
+    }
+
     fun findCommentWithReview(commentId: String): Pair<Review, ReviewComment>? = findComment(commentId)
 
     fun buildAgentPrompt(reviewId: String): String? = findReview(reviewId)?.let { AgentPromptBuilder().build(it) }
@@ -405,17 +436,23 @@ class ReviewManagerService(private val project: Project) : Disposable {
         } else {
             false
         }
+        val clearedSeenFiles = if ((headChanged || !hasChanges) && keepReview.seenFiles.isNotEmpty()) {
+            keepReview.seenFiles.clear()
+            true
+        } else {
+            false
+        }
         if (headChanged) {
             keepReview.target.commitHash = currentHeadHash
         }
-        if (headChanged || clearedComments) {
+        if (headChanged || clearedComments || clearedSeenFiles) {
             keepReview.updatedAt = nowIso()
         }
         val shouldSelectUncommitted = currentReviewId == null
         if ((!hasChanges || headChanged) && currentReviewId == keepReview.id) {
             currentFilePath = null
         }
-        if (removedIds.isEmpty() && !shouldSelectUncommitted && !clearedComments && !headChanged) return false
+        if (removedIds.isEmpty() && !shouldSelectUncommitted && !clearedComments && !clearedSeenFiles && !headChanged) return false
 
         removedIds.forEach(stateService::removeReview)
 

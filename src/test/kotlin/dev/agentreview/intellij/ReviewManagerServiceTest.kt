@@ -178,6 +178,37 @@ class ReviewManagerServiceTest {
     }
 
     @Test
+    fun markFileSeenTracksCurrentSnapshotOnlyOnce() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededCommitReview("seen-once")
+        ReviewStateService.getInstance(project).addReview(review)
+
+        val firstMarked = manager.markFileSeen(review.id, sampleChangedFile("src/Foo.kt"))
+        val secondMarked = manager.markFileSeen(review.id, sampleChangedFile("src/Foo.kt"))
+
+        assertThat(firstMarked).isTrue()
+        assertThat(secondMarked).isFalse()
+        assertThat(manager.findReview(review.id)?.seenFiles).hasSize(1)
+    }
+
+    @Test
+    fun syncSeenFilesRemovesStaleSnapshots() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededCommitReview("seen-prune")
+        ReviewStateService.getInstance(project).addReview(review)
+        manager.markFileSeen(review.id, sampleChangedFile("src/Foo.kt"))
+
+        val changed = manager.syncSeenFiles(
+            review.id,
+            listOf(sampleChangedFile("src/Foo.kt", afterText = "one\ntwo\nthree\nfour\nfive")),
+            notify = false,
+        )
+
+        assertThat(changed).isTrue()
+        assertThat(manager.findReview(review.id)?.seenFiles).isEmpty()
+    }
+
+    @Test
     fun syncUncommittedReviewStateKeepsReviewWhenChangesGone() {
         val manager = ReviewManagerService.getInstance(project)
         manager.hasUncommittedChangesSupplier = { false }
@@ -221,6 +252,23 @@ class ReviewManagerServiceTest {
     }
 
     @Test
+    fun syncUncommittedReviewStateClearsSeenFilesWhenChangesGone() {
+        val manager = ReviewManagerService.getInstance(project)
+        manager.hasUncommittedChangesSupplier = { false }
+        manager.uncommittedChangesLoader = { emptyList() }
+        manager.repositoryRootResolver = { "/tmp/repo" }
+        manager.currentHeadHashSupplier = { "head-1" }
+        manager.openDefaultReview()
+        val review = manager.getCurrentReview()!!
+        manager.markFileSeen(review.id, sampleChangedFile("src/Foo.kt"))
+
+        val changed = manager.syncUncommittedReviewState()
+
+        assertThat(changed).isTrue()
+        assertThat(manager.findReview(review.id)?.seenFiles).isEmpty()
+    }
+
+    @Test
     fun syncUncommittedReviewStateClearsCommentsWhenHeadChanges() {
         val manager = ReviewManagerService.getInstance(project)
         manager.hasUncommittedChangesSupplier = { true }
@@ -244,6 +292,25 @@ class ReviewManagerServiceTest {
 
         assertThat(changed).isTrue()
         assertThat(manager.findReview(review.id)?.comments).isEmpty()
+        assertThat(manager.findReview(review.id)?.target?.commitHash).isEqualTo("head-2")
+    }
+
+    @Test
+    fun syncUncommittedReviewStateClearsSeenFilesWhenHeadChanges() {
+        val manager = ReviewManagerService.getInstance(project)
+        manager.hasUncommittedChangesSupplier = { true }
+        manager.uncommittedChangesLoader = { listOf(sampleChangedFile("src/Foo.kt")) }
+        manager.repositoryRootResolver = { "/tmp/repo" }
+        manager.currentHeadHashSupplier = { "head-1" }
+        manager.openDefaultReview()
+        val review = manager.getCurrentReview()!!
+        manager.markFileSeen(review.id, sampleChangedFile("src/Foo.kt"))
+        manager.currentHeadHashSupplier = { "head-2" }
+
+        val changed = manager.syncUncommittedReviewState()
+
+        assertThat(changed).isTrue()
+        assertThat(manager.findReview(review.id)?.seenFiles).isEmpty()
         assertThat(manager.findReview(review.id)?.target?.commitHash).isEqualTo("head-2")
     }
 
@@ -302,16 +369,20 @@ class ReviewManagerServiceTest {
         updatedAt = "2026-05-07T14:20:00+03:00",
     )
 
-    private fun sampleChangedFile(path: String): ChangedFile = ChangedFile(
+    private fun sampleChangedFile(
+        path: String,
+        beforeText: String = "zero\none\nold-three\nfour",
+        afterText: String = "one\ntwo\nthree\nfour",
+    ): ChangedFile = ChangedFile(
         filePath = path,
         status = ChangedFileStatus.MODIFIED,
         beforeContent = ReviewContent(
-            text = "zero\none\nold-three\nfour",
+            text = beforeText,
             revisionTitle = "before",
             filePath = path,
         ),
         afterContent = ReviewContent(
-            text = "one\ntwo\nthree\nfour",
+            text = afterText,
             revisionTitle = "after",
             filePath = path,
         ),

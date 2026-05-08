@@ -121,7 +121,7 @@ class ReviewToolWindowPanel(
         }
 
         val files = changedFilesByReviewId[review.id].orEmpty()
-        changedFilesPanel.setFiles(files, manager.currentFilePath, commentCountsByPath(review))
+        changedFilesPanel.setFiles(files, manager.currentFilePath, commentCountsByPath(review), manager.seenFileKeys(review.id))
 
         contentPanel.add(createMainContent(), BorderLayout.CENTER)
         loadChangedFilesIfNeeded(review)
@@ -149,6 +149,7 @@ class ReviewToolWindowPanel(
             diffPanel.showDiff(MessageDiffRequest("Select changed file to review."))
         } else {
             diffPanel.showDiff(diffRequestBuilder.buildForFile(reviewId, changedFile))
+            manager.markFileSeen(reviewId, changedFile)
         }
     }
 
@@ -171,8 +172,9 @@ class ReviewToolWindowPanel(
 
             override fun onSuccess() {
                 changedFilesByReviewId[review.id] = changedFiles
+                manager.syncSeenFiles(review.id, changedFiles, notify = false)
                 if (requestId == changedFilesLoadSequence.get() && manager.currentReviewId == review.id) {
-                    changedFilesPanel.setFiles(changedFiles, manager.currentFilePath, commentCountsByPath(review))
+                    changedFilesPanel.setFiles(changedFiles, manager.currentFilePath, commentCountsByPath(review), manager.seenFileKeys(review.id))
                     refreshDiff()
                 }
             }

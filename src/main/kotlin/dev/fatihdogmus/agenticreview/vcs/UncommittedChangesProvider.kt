@@ -4,16 +4,35 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.VcsException
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangeListManager
+import java.nio.file.Files
 import java.nio.file.Path
 
 class UncommittedChangesProvider(private val project: Project) {
     fun getChangedFiles(): List<ChangedFile> {
         val repositoryRoot = GitRepositoryResolver(project).resolveRepositoryRoot()
-        return ChangeListManager.getInstance(project)
+        val changeListManager = ChangeListManager.getInstance(project)
+        val tracked = changeListManager
             .defaultChangeList
             .changes
             .mapNotNull { change -> change.toChangedFile(repositoryRoot) }
-            .sortedBy { it.filePath }
+
+        val trackedPaths = tracked.map { it.filePath }.toSet()
+        val unversioned = changeListManager.unversionedFilesPaths
+            .asSequence()
+            .map { path -> path.path.toRelativePath(repositoryRoot) }
+            .filter { it !in trackedPaths }
+            .mapNotNull { relativePath ->
+                val contentPath = Path.of(repositoryRoot, relativePath)
+                if (!Files.exists(contentPath)) return@mapNotNull null
+                ChangedFile(
+                    filePath = relativePath,
+                    status = ChangedFileStatus.ADDED,
+                    beforeContent = null,
+                    afterContent = ReviewContent(Files.readString(contentPath), "WORKTREE", relativePath),
+                )
+            }
+
+        return (tracked + unversioned).sortedBy { it.filePath }
     }
 
     private fun Change.toChangedFile(repositoryRoot: String): ChangedFile? {

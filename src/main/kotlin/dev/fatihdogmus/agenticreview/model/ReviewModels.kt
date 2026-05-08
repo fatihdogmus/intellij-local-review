@@ -18,6 +18,14 @@ data class Review(
     var updatedAt: String = "",
     var status: ReviewStatus = ReviewStatus.OPEN,
     var comments: MutableList<ReviewComment> = mutableListOf(),
+    var seenFiles: MutableList<SeenFileState> = mutableListOf(),
+)
+
+@Serializable
+data class SeenFileState(
+    var key: String = "",
+    var filePath: String = "",
+    var seenAt: String = "",
 )
 
 @Serializable

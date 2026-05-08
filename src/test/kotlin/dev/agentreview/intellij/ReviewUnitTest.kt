@@ -123,5 +123,6 @@ class ReviewUnitTest {
                 updatedAt = "2026-05-07T14:20:00+03:00",
             ),
         ),
+        seenFiles = mutableListOf(),
     )
 }
