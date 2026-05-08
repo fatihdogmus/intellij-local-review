@@ -229,3 +229,7 @@ Run one test class:
 - The plugin currently targets `intellijIdea("2026.1.1")` from `build.gradle.kts`.
 - MCP is enabled by default in `runIde` via `-Dlocal.review.enable.mcp.by.default=true`.
 - Saved review artifacts in `.local-review/` are local workspace data and should not be committed.
+
+## License
+
+This project is licensed under the MIT License. See [`LICENSE`](LICENSE).
