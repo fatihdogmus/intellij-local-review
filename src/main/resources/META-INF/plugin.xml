@@ -1,6 +1,7 @@
 <idea-plugin>
     <id>dev.fatihdogmus.localreview</id>
     <name>Local Review</name>
+    <version>0.0.1</version>
     <vendor>Internal</vendor>
     <description><![CDATA[
         <p>Local PR-like review workflow for IntelliJ IDEA.</p>

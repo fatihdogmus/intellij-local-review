@@ -32,6 +32,16 @@ kotlin {
     jvmToolchain(21)
 }
 
+intellijPlatform {
+    pluginConfiguration {
+        version = providers.gradleProperty("version")
+    }
+
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
+}
+
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
     jvmArgs(
