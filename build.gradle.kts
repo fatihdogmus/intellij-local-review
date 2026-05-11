@@ -70,5 +70,5 @@ tasks.withType<Test>().configureEach {
 }
 
 tasks.named<JavaExec>("runIde") {
-    jvmArgs("-Dlocal.review.enable.mcp.by.default=true")
+    jvmArgs("-Didea.mcp.server.force.port=64342")
 }

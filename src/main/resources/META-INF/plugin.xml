@@ -24,7 +24,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <diff.DiffExtension implementation="dev.fatihdogmus.agenticreview.diff.ReviewDiffExtension"/>
         <fileEditorProvider implementation="dev.fatihdogmus.agenticreview.editor.ReviewPageEditorProvider"/>
-        <postStartupActivity implementation="dev.fatihdogmus.agenticreview.EnableMcpServerOnStartupActivity"/>
+
         <mcpServer.mcpToolset implementation="dev.fatihdogmus.agenticreview.mcp.ReviewMcpToolset"/>
         <notificationGroup id="Agentic Review" displayType="BALLOON" isLogByDefault="false"/>
         <toolWindow id="Agentic Review" anchor="left" secondary="true" factoryClass="dev.fatihdogmus.agenticreview.ReviewStripeToolWindowFactory"/>
