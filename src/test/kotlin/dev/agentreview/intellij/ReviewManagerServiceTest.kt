@@ -8,6 +8,7 @@ import dev.fatihdogmus.agenticreview.model.Review
 import dev.fatihdogmus.agenticreview.model.ReviewTarget
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
+import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.vcs.BranchReviewMetadata
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
@@ -16,12 +17,22 @@ import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.model.CommentAnchor
 import dev.fatihdogmus.agenticreview.model.ReviewComment
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
+import java.nio.file.Path
 
 @TestApplication
 class ReviewManagerServiceTest {
     private val project by projectFixture()
+
+    @BeforeEach
+    fun resetTurnState() {
+        TurnSnapshotService.getInstance(project).clearAll(notify = false)
+        ReviewStateService.getInstance(project).setTurnSnapshotsJson("")
+        ReviewStateService.getInstance(project).setTurnDiffsJson("")
+    }
 
     @Test
     fun addCommentBuildsMultiLineAnchor() {
@@ -269,6 +280,28 @@ class ReviewManagerServiceTest {
     }
 
     @Test
+    fun syncUncommittedReviewStateClearsStoredTurnsWhenChangesGone() {
+        val manager = ReviewManagerService.getInstance(project)
+        val turnService = TurnSnapshotService.getInstance(project)
+        manager.hasUncommittedChangesSupplier = { true }
+        manager.uncommittedChangesLoader = { listOf(sampleChangedFile("src/Foo.kt")) }
+        manager.repositoryRootResolver = { "/tmp/repo" }
+        manager.currentHeadHashSupplier = { "head-1" }
+        manager.openDefaultReview()
+
+        turnService.beginTurn("session-clear-empty", "step-clear-empty", project.basePath!!, null, null)
+        turnService.endTurn("session-clear-empty", "step-clear-empty", "completed", emptyList(), emptyList())
+        manager.hasUncommittedChangesSupplier = { false }
+        manager.uncommittedChangesLoader = { emptyList() }
+
+        val changed = manager.syncUncommittedReviewState()
+
+        assertThat(changed).isTrue()
+        assertThat(turnService.getCompletedTurns()).isEmpty()
+        assertThat(ReviewStateService.getInstance(project).turnSnapshotsJson()).contains("\"completedTurns\":[]")
+    }
+
+    @Test
     fun syncUncommittedReviewStateClearsCommentsWhenHeadChanges() {
         val manager = ReviewManagerService.getInstance(project)
         manager.hasUncommittedChangesSupplier = { true }
@@ -315,6 +348,27 @@ class ReviewManagerServiceTest {
     }
 
     @Test
+    fun syncUncommittedReviewStateClearsStoredTurnsWhenHeadChanges() {
+        val manager = ReviewManagerService.getInstance(project)
+        val turnService = TurnSnapshotService.getInstance(project)
+        manager.hasUncommittedChangesSupplier = { true }
+        manager.uncommittedChangesLoader = { listOf(sampleChangedFile("src/Foo.kt")) }
+        manager.repositoryRootResolver = { "/tmp/repo" }
+        manager.currentHeadHashSupplier = { "head-1" }
+        manager.openDefaultReview()
+
+        turnService.beginTurn("session-clear-head", "step-clear-head", project.basePath!!, null, null)
+        turnService.endTurn("session-clear-head", "step-clear-head", "completed", emptyList(), emptyList())
+        manager.currentHeadHashSupplier = { "head-2" }
+
+        val changed = manager.syncUncommittedReviewState()
+
+        assertThat(changed).isTrue()
+        assertThat(turnService.getCompletedTurns()).isEmpty()
+        assertThat(manager.findReview(manager.getCurrentReview()!!.id)?.target?.commitHash).isEqualTo("head-2")
+    }
+
+    @Test
     fun initCreatesPersistentUncommittedReview() {
         val manager = ReviewManagerService.getInstance(project)
 
@@ -349,6 +403,302 @@ class ReviewManagerServiceTest {
         assertThat(review.target.headRef).isEqualTo("head-456")
         assertThat(review.target.subject).isEqualTo("feature/test vs main")
         assertThat(review.title).isEqualTo("feature/test vs main")
+    }
+
+    @Test
+    fun createBranchReviewFailsWhenMetadataUnavailable() {
+        val manager = ReviewManagerService.getInstance(project)
+        manager.branchReviewMetadataProvider = { null }
+
+        assertThatThrownBy { manager.createBranchReview() }
+            .isInstanceOf(IllegalStateException::class.java)
+            .hasMessageContaining("Branch review unavailable")
+    }
+
+    @Test
+    fun canSaveReviewCoversNullUncommittedAndCommitReviews() {
+        val manager = ReviewManagerService.getInstance(project)
+
+        assertThat(manager.canSaveReview(null)).isFalse()
+        assertThat(manager.canSaveReview(seededReview("unsavable"))).isFalse()
+        assertThat(manager.canSaveReview(seededCommitReview("savable"))).isTrue()
+    }
+
+    @Test
+    fun prepareSaveReviewReturnsNullForMissingAndUncommittedReviews() {
+        val manager = ReviewManagerService.getInstance(project)
+        val uncommitted = seededReview("prepare-null")
+        ReviewStateService.getInstance(project).addReview(uncommitted)
+
+        assertThat(manager.prepareSaveReview("missing", "Name")).isNull()
+        assertThat(manager.prepareSaveReview(uncommitted.id, "Name")).isNull()
+    }
+
+    @Test
+    fun getCurrentReviewClearsStaleSelection() {
+        val manager = ReviewManagerService.getInstance(project)
+        manager.selectReview("missing-review")
+        manager.selectFile("src/Foo.kt")
+
+        assertThat(manager.getCurrentReview()).isNull()
+        assertThat(manager.currentReviewId).isNull()
+        assertThat(manager.currentFilePath).isNull()
+    }
+
+    @Test
+    fun createCommitRangeReviewRejectsEmptyCommitList() {
+        val manager = ReviewManagerService.getInstance(project)
+
+        assertThatThrownBy { manager.createCommitRangeReview(emptyList()) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessageContaining("commitHashes must not be empty")
+    }
+
+    @Test
+    fun createCommitRangeReviewSingleCommitFallsBackToCommitReview() {
+        val repoRoot = initGitRepo()
+        write(repoRoot.resolve("src/Foo.kt"), "one\n")
+        runGit(repoRoot, "add", ".")
+        runGit(repoRoot, "commit", "-m", "initial")
+        val commit = head(repoRoot)
+        val manager = ReviewManagerService.getInstance(project)
+
+        val review = manager.createCommitRangeReview(listOf(commit))
+
+        assertThat(review.target.type).isEqualTo(ReviewTargetType.COMMIT)
+        assertThat(review.target.commitHash).isEqualTo(commit)
+    }
+
+    @Test
+    fun createCommitRangeReviewMultipleCommitsCreatesRangeReview() {
+        val repoRoot = initGitRepo()
+        write(repoRoot.resolve("src/Foo.kt"), "one\n")
+        runGit(repoRoot, "add", ".")
+        runGit(repoRoot, "commit", "-m", "first")
+        val first = head(repoRoot)
+        write(repoRoot.resolve("src/Foo.kt"), "two\n")
+        runGit(repoRoot, "add", ".")
+        runGit(repoRoot, "commit", "-m", "second")
+        val second = head(repoRoot)
+        write(repoRoot.resolve("src/Foo.kt"), "three\n")
+        runGit(repoRoot, "add", ".")
+        runGit(repoRoot, "commit", "-m", "third")
+        val third = head(repoRoot)
+        val manager = ReviewManagerService.getInstance(project)
+
+        val review = manager.createCommitRangeReview(listOf(second, third))
+
+        assertThat(review.target.type).isEqualTo(ReviewTargetType.COMMIT_RANGE)
+        assertThat(review.target.baseRef).isEqualTo(first)
+        assertThat(review.target.headRef).isEqualTo(third)
+    }
+
+    @Test
+    fun loadChangedFilesCoversUncommittedCommitAndRangeReviews() {
+        val repoRoot = initGitRepo()
+        val manager = ReviewManagerService.getInstance(project)
+        manager.uncommittedChangesLoader = { listOf(sampleChangedFile("src/Uncommitted.kt")) }
+        val uncommittedFiles = manager.loadChangedFiles(seededReview("load-uncommitted"))
+
+        write(repoRoot.resolve("src/Foo.kt"), "one\n")
+        runGit(repoRoot, "add", ".")
+        runGit(repoRoot, "commit", "-m", "first")
+        val first = head(repoRoot)
+        write(repoRoot.resolve("src/Foo.kt"), "two\n")
+        runGit(repoRoot, "add", ".")
+        runGit(repoRoot, "commit", "-m", "second")
+        val second = head(repoRoot)
+
+        val commitReview = seededCommitReview("load-commit").apply { repositoryRoot = repoRoot.toString(); target.commitHash = second }
+        val rangeReview = Review(
+            id = "review-range-load",
+            title = "Range",
+            target = ReviewTarget(type = ReviewTargetType.COMMIT_RANGE, baseRef = first, headRef = second),
+            repositoryRoot = repoRoot.toString(),
+            createdAt = "2026-05-07T14:20:00+03:00",
+            updatedAt = "2026-05-07T14:20:00+03:00",
+        )
+
+        assertThat(uncommittedFiles).hasSize(1)
+        assertThat(manager.loadChangedFiles(commitReview)).hasSize(1)
+        assertThat(manager.loadChangedFiles(rangeReview)).hasSize(1)
+    }
+
+    @Test
+    fun deleteReviewDoesNothingForUncommittedReview() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededReview("delete-uncommitted")
+        ReviewStateService.getInstance(project).addReview(review)
+
+        manager.deleteReview(review.id)
+
+        assertThat(manager.findReview(review.id)).isNotNull
+    }
+
+    @Test
+    fun deleteReviewSelectsUncommittedReviewWhenCurrentCommitReviewIsDeleted() {
+        val manager = ReviewManagerService.getInstance(project)
+        val uncommitted = seededReview("delete-select-uncommitted")
+        val commitReview = seededCommitReview("delete-current")
+        ReviewStateService.getInstance(project).addReview(uncommitted)
+        ReviewStateService.getInstance(project).addReview(commitReview)
+        manager.selectReview(commitReview.id)
+
+        manager.deleteReview(commitReview.id)
+
+        assertThat(manager.findReview(commitReview.id)).isNull()
+        assertThat(manager.getCurrentReview()?.target?.type).isEqualTo(ReviewTargetType.UNCOMMITTED)
+    }
+
+    @Test
+    fun markCommentResolvedWithoutMetadataKeepsAgentMetadataNull() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededCommitReview("resolve-no-meta")
+        ReviewStateService.getInstance(project).addReview(review)
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 1, "todo")
+        val commentId = manager.findReview(review.id)!!.comments.single().id
+
+        manager.markCommentResolved(commentId)
+
+        val comment = manager.findReview(review.id)!!.comments.single()
+        assertThat(comment.status).isEqualTo(CommentStatus.RESOLVED)
+        assertThat(comment.agentMetadata).isNull()
+    }
+
+    @Test
+    fun markCommentResolvedStoresAgentMetadataWhenProvided() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededCommitReview("resolve-meta")
+        ReviewStateService.getInstance(project).addReview(review)
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 1, "todo")
+        val commentId = manager.findReview(review.id)!!.comments.single().id
+
+        manager.markCommentResolved(commentId, message = "done", agentName = "opencode", runId = "run-1")
+
+        val comment = manager.findReview(review.id)!!.comments.single()
+        assertThat(comment.status).isEqualTo(CommentStatus.RESOLVED)
+        assertThat(comment.agentMetadata?.addressedBy).isEqualTo("opencode")
+        assertThat(comment.agentMetadata?.message).isEqualTo("done")
+        assertThat(comment.agentMetadata?.runId).isEqualTo("run-1")
+        assertThat(comment.agentMetadata?.addressedAt).isNotBlank()
+    }
+
+    @Test
+    fun seenFileKeysReturnsEmptyForMissingReviewAndCurrentKeysForExistingReview() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededCommitReview("seen-keys")
+        ReviewStateService.getInstance(project).addReview(review)
+        manager.markFileSeen(review.id, sampleChangedFile("src/Foo.kt"))
+
+        assertThat(manager.seenFileKeys("missing")).isEmpty()
+        assertThat(manager.seenFileKeys(review.id)).hasSize(1)
+    }
+
+    @Test
+    fun buildAgentPromptReturnsNullForMissingReview() {
+        val manager = ReviewManagerService.getInstance(project)
+        assertThat(manager.buildAgentPrompt("missing")).isNull()
+    }
+
+    @Test
+    fun updateCommentUpdatesBodyAndTimestamp() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededCommitReview("update-comment")
+        ReviewStateService.getInstance(project).addReview(review)
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 1, "before")
+        val comment = manager.findReview(review.id)!!.comments.single()
+        val previousUpdatedAt = comment.updatedAt
+
+        manager.updateComment(comment.id, "after")
+
+        val updated = manager.findReview(review.id)!!.comments.single()
+        assertThat(updated.body).isEqualTo("after")
+        assertThat(updated.updatedAt).isNotEqualTo(previousUpdatedAt)
+    }
+
+    @Test
+    fun deleteCommentDoesNothingForMissingId() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededCommitReview("delete-missing-comment")
+        ReviewStateService.getInstance(project).addReview(review)
+
+        manager.deleteComment("missing")
+
+        assertThat(manager.findReview(review.id)?.comments).isEmpty()
+    }
+
+    @Test
+    fun commentsForFileReturnsSortedOpenComments() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededCommitReview("comments-sorted")
+        review.comments += ReviewComment(
+            id = "c2",
+            reviewId = review.id,
+            filePath = "src/Foo.kt",
+            anchor = CommentAnchor(newLine = 5),
+            body = "later",
+            status = CommentStatus.OPEN,
+            createdAt = "2026-05-07T14:21:00+03:00",
+            updatedAt = "2026-05-07T14:21:00+03:00",
+        )
+        review.comments += ReviewComment(
+            id = "c1",
+            reviewId = review.id,
+            filePath = "src/Foo.kt",
+            anchor = CommentAnchor(newLine = 2),
+            body = "earlier",
+            status = CommentStatus.OPEN,
+            createdAt = "2026-05-07T14:20:00+03:00",
+            updatedAt = "2026-05-07T14:20:00+03:00",
+        )
+        review.comments += ReviewComment(
+            id = "resolved",
+            reviewId = review.id,
+            filePath = "src/Foo.kt",
+            anchor = CommentAnchor(newLine = 1),
+            body = "resolved",
+            status = CommentStatus.RESOLVED,
+            createdAt = "2026-05-07T14:19:00+03:00",
+            updatedAt = "2026-05-07T14:19:00+03:00",
+        )
+        ReviewStateService.getInstance(project).addReview(review)
+
+        val comments = manager.commentsForFile(review.id, "src/Foo.kt")
+
+        assertThat(comments.map { it.id }).containsExactly("c1", "c2")
+    }
+
+    @Test
+    fun ensureUncommittedReviewKeepsCurrentSelectionWhenAlreadySet() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededCommitReview("preserve-selection")
+        ReviewStateService.getInstance(project).addReview(review)
+        manager.selectReview(review.id)
+        manager.hasUncommittedChangesSupplier = { true }
+        manager.uncommittedChangesLoader = { listOf(sampleChangedFile("src/Foo.kt")) }
+        manager.repositoryRootResolver = { "/tmp/repo" }
+        manager.currentHeadHashSupplier = { "head-1" }
+
+        manager.openDefaultReview()
+
+        assertThat(manager.getCurrentReview()?.target?.type).isEqualTo(ReviewTargetType.UNCOMMITTED)
+    }
+
+    @Test
+    fun syncSeenFilesReturnsFalseWhenNothingChanges() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededCommitReview("sync-seen-noop")
+        ReviewStateService.getInstance(project).addReview(review)
+        manager.markFileSeen(review.id, sampleChangedFile("src/Foo.kt"))
+
+        val changed = manager.syncSeenFiles(
+            review.id,
+            listOf(sampleChangedFile("src/Foo.kt")),
+            notify = false,
+        )
+
+        assertThat(changed).isFalse()
+        assertThat(manager.findReview(review.id)?.seenFiles).hasSize(1)
     }
 
     private fun seededReview(suffix: String): Review = Review(
@@ -387,6 +737,33 @@ class ReviewManagerServiceTest {
             filePath = path,
         ),
     )
+
+    private fun initGitRepo(): Path {
+        val root = Path.of(project.basePath!!)
+        runGit(root, "init")
+        runGit(root, "config", "user.email", "test@example.com")
+        runGit(root, "config", "user.name", "Test User")
+        runGit(root, "branch", "-M", "main")
+        return root
+    }
+
+    private fun write(path: Path, content: String) {
+        Files.createDirectories(path.parent)
+        Files.writeString(path, content)
+    }
+
+    private fun head(root: Path): String = runGit(root, "rev-parse", "HEAD").trim()
+
+    private fun runGit(root: Path, vararg args: String): String {
+        val process = ProcessBuilder(listOf("git", *args))
+            .directory(root.toFile())
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        val exitCode = process.waitFor()
+        check(exitCode == 0) { "git ${args.joinToString(" ")} failed: $output" }
+        return output
+    }
 
     private fun sampleBranchReviewMetadata(): BranchReviewMetadata = BranchReviewMetadata(
         repositoryRoot = "/tmp/repo",

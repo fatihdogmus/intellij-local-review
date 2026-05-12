@@ -3,7 +3,8 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 
 const MCP_URL = "http://127.0.0.1:64342/stream"
 const MCP_RETRY_MS = 2000
-const MCP_RETRY_MAX = 15
+const MCP_RETRY_MAX = 2
+const MCP_FAILURE_COOLDOWN_MS = 30000
 const RELEVANT_TOOLS = new Set(["edit", "write", "apply_patch", "bash"])
 
 interface SessionState {
@@ -60,20 +61,35 @@ function textContent(content: unknown): string[] {
 }
 
 async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
+  let lastError: unknown
   for (let i = 0; i < MCP_RETRY_MAX; i++) {
     try {
       return await fn()
     } catch (err) {
+      lastError = err
       if (i === MCP_RETRY_MAX - 1) throw err
-      console.warn(`[agentic-review] ${label} failed, retrying in ${MCP_RETRY_MS}ms:`, err)
       await new Promise((r) => setTimeout(r, MCP_RETRY_MS))
     }
   }
-  throw new Error("unreachable")
+  throw lastError ?? new Error(`Failed: ${label}`)
 }
 
 class TurnSnapshotClient {
+  private disabledUntil = 0
+
+  private shouldSkip(): boolean {
+    return Date.now() < this.disabledUntil
+  }
+
+  private backoff(): void {
+    this.disabledUntil = Date.now() + MCP_FAILURE_COOLDOWN_MS
+  }
+
   async callTool(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (this.shouldSkip()) {
+      throw new Error("MCP temporarily unavailable")
+    }
+
     return await withRetry(async () => {
       const transport = new StreamableHTTPClientTransport(new URL(MCP_URL))
       const client = new Client(
@@ -98,7 +114,10 @@ class TurnSnapshotClient {
           await client.close()
         } catch {}
       }
-    }, `MCP tool ${name}`)
+    }, `MCP tool ${name}`).catch((err) => {
+      this.backoff()
+      throw err
+    })
   }
 }
 
@@ -138,8 +157,7 @@ export const AgenticReviewPlugin = async ({
         agent: agent ?? null,
         model: model ?? null,
       })
-    } catch (err) {
-      console.warn("[agentic-review] beginTurn failed:", err)
+    } catch {
     }
   }
 
@@ -164,8 +182,7 @@ export const AgenticReviewPlugin = async ({
         changedPathsJson: JSON.stringify(paths),
         toolCallsJson: JSON.stringify(turn.toolCalls),
       })
-    } catch (err) {
-      console.warn("[agentic-review] endTurn failed:", err)
+    } catch {
     }
   }
 

@@ -280,9 +280,7 @@ class ReviewManagerService(private val project: Project) : Disposable {
 
     fun loadChangedFiles(review: Review): List<ChangedFile> = when (review.target.type) {
         ReviewTargetType.UNCOMMITTED -> {
-            val changedFiles = currentUncommittedChanges()
-            if (changedFiles.isEmpty()) syncUncommittedReviewState()
-            changedFiles
+            currentUncommittedChanges()
         }
         ReviewTargetType.COMMIT -> CommitChangesProvider(project).getChangedFiles(review.target.commitHash ?: error("Commit hash missing"))
         ReviewTargetType.COMMIT_RANGE -> CommitChangesProvider(project).getChangedFilesForRange(
@@ -446,7 +444,7 @@ class ReviewManagerService(private val project: Project) : Disposable {
             false
         }
         val clearedTurns = if (shouldClearUncommittedState && turnSnapshotService.hasStoredTurns()) {
-            turnSnapshotService.clearAll()
+            turnSnapshotService.clearAll(notify = false)
             true
         } else {
             false

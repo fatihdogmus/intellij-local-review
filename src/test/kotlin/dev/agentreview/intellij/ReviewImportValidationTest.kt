@@ -37,6 +37,21 @@ class ReviewImportValidationTest {
     }
 
     @Test
+    fun loadReviewFromFileRejectsEndCommitOutsideCurrentBranch() {
+        val manager = configuredManager()
+        val file = writeArchive(
+            archive = validCommitRangeArchive(),
+            fileName = "range-head-not-reachable.json",
+        )
+        manager.isCommitReachableOnCurrentBranchSupplier = { commit -> commit != "range-head-456" }
+
+        val result = manager.loadReviewFromFile(file)
+
+        assertThat(result.ok).isFalse()
+        assertThat(result.error).contains("End commit is not reachable")
+    }
+
+    @Test
     fun loadReviewFromFileReturnsGenericMalformedErrorForInvalidJsonSyntax() {
         val manager = configuredManager()
         val file = writeRawJson("syntax-error.json", "{" )

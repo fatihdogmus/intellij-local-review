@@ -96,12 +96,12 @@ class TurnSnapshotService(private val project: Project) : Disposable {
 
     fun findTurn(turnId: String): TurnSnapshot? = completedTurns.firstOrNull { it.id == turnId }
 
-    fun clearAll() {
+    fun clearAll(notify: Boolean = true) {
         activeTurn = null
         completedTurns.clear()
         completedTurnDiffs.clear()
         saveState()
-        notifyChanged()
+        if (notify) notifyChanged()
     }
 
     fun hasStoredTurns(): Boolean = activeTurn != null || completedTurns.isNotEmpty() || completedTurnDiffs.isNotEmpty()

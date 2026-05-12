@@ -4,6 +4,7 @@ import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.mcp.CommentListResult
+import dev.fatihdogmus.agenticreview.mcp.ExportResult
 import dev.fatihdogmus.agenticreview.mcp.MutationResult
 import dev.fatihdogmus.agenticreview.mcp.ReviewMcpToolset
 import dev.fatihdogmus.agenticreview.mcp.ReviewResult
@@ -113,6 +114,59 @@ class ReviewMcpToolsetTest {
         assertThat(result.review.openCommentCount).isEqualTo(1)
         assertThat(result.review.resolvedCommentCount).isEqualTo(1)
         assertThat(result.review.comments).hasSize(2)
+    }
+
+    @Test
+    suspend fun reviewGetReviewCanExcludeCommentsAndUseLatestOpenSelector() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededReview(
+            suffix = "latest-open",
+            target = ReviewTarget(type = ReviewTargetType.COMMIT, commitHash = "latest-open-1", parentHash = "0000000"),
+        )
+        ReviewStateService.getInstance(project).addReview(review)
+        manager.selectReview(review.id)
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 2, "open")
+
+        val result = json.decodeFromString<ReviewResult>(
+            ReviewMcpToolset().reviewGetReview(selector = "latest-open", includeComments = false),
+        )
+
+        assertThat(result.review.id).isEqualTo(review.id)
+        assertThat(result.review.comments).isEmpty()
+        assertThat(result.review.openCommentCount).isEqualTo(1)
+    }
+
+    @Test
+    suspend fun reviewGetReviewCanResolveUncommittedSelectorAndHideResolvedComments() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = manager.getCurrentReview() ?: error("current review missing")
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 2, "open")
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 3, "resolved")
+        val resolved = manager.findReview(review.id)!!.comments.last().id
+        manager.markCommentResolved(resolved)
+
+        val result = json.decodeFromString<ReviewResult>(
+            ReviewMcpToolset().reviewGetReview(selector = "uncommitted", includeComments = true, includeResolved = false),
+        )
+
+        assertThat(result.review.target.type).isEqualTo(ReviewTargetType.UNCOMMITTED)
+        assertThat(result.review.comments).singleElement().extracting("body").isEqualTo("open")
+    }
+
+    @Test
+    suspend fun reviewExportSupportsJsonFormat() {
+        val review = seededReview(
+            suffix = "export-json",
+            target = ReviewTarget(type = ReviewTargetType.COMMIT, commitHash = "json-1", parentHash = "0000000"),
+        )
+        ReviewStateService.getInstance(project).addReview(review)
+
+        val result = json.decodeFromString<ExportResult>(
+            ReviewMcpToolset().reviewExport(reviewId = review.id, format = "json"),
+        )
+
+        assertThat(result.format).isEqualTo("json")
+        assertThat(result.content).contains("\"id\": \"${review.id}\"")
     }
 
     @Test

@@ -2,12 +2,14 @@ import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.JavaExec
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.intellij.platform")
     id("org.jetbrains.kotlin.plugin.serialization")
+    jacoco
 }
 
 dependencies {
@@ -67,6 +69,21 @@ tasks.withType<Test>().configureEach {
         "--add-opens=java.desktop/javax.swing=ALL-UNNAMED",
         "--add-opens=java.base/java.lang=ALL-UNNAMED",
     )
+    extensions.configure(JacocoTaskExtension::class.java) {
+        isIncludeNoLocationClasses = true
+        excludes = listOf("jdk.internal.*")
+    }
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    classDirectories.setFrom(layout.buildDirectory.dir("instrumented/instrumentCode"))
+    sourceDirectories.setFrom(files("src/main/kotlin"))
+    executionData.setFrom(layout.buildDirectory.file("jacoco/test.exec"))
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
 }
 
 tasks.named<JavaExec>("runIde") {

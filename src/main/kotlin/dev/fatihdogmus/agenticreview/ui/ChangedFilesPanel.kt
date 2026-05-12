@@ -49,6 +49,7 @@ class ChangedFilesPanel {
     private var turnFilesById: Map<String, List<ChangedFile>> = emptyMap()
     private var seenFileKeys: Set<String> = emptySet()
     private var selectedFilePath: String? = null
+    private var turnsEnabled = false
     private val titleLabel = JBLabel("Changed Files")
     private val turnCombo = JComboBox<TurnComboItem>()
     var onSelectionChanged: ((ChangedFile?) -> Unit)? = null
@@ -121,6 +122,15 @@ class ChangedFilesPanel {
     }
 
     fun refreshTurns(turnSnapshotService: TurnSnapshotService) {
+        if (!turnsEnabled) {
+            turnFilesById = emptyMap()
+            turnCombo.removeAllItems()
+            turnCombo.addItem(TurnComboItem("Review Changes", null))
+            turnCombo.selectedIndex = 0
+            turnCombo.isVisible = false
+            titleLabel.text = "Changed Files"
+            return
+        }
         val previousId = (turnCombo.selectedItem as? TurnComboItem)?.turn?.id
         turnFilesById = turnSnapshotService.getCompletedTurns().associate { it.id to turnSnapshotService.getTurnDiffs(it.id) }
         turnCombo.removeAllItems()
@@ -134,6 +144,16 @@ class ChangedFilesPanel {
             }.coerceAtLeast(0)
         } else 0
         turnCombo.selectedIndex = selectIndex
+        turnCombo.isVisible = true
+    }
+
+    fun setTurnsEnabled(enabled: Boolean) {
+        if (turnsEnabled == enabled) return
+        turnsEnabled = enabled
+        if (!enabled) {
+            turnCombo.selectedIndex = 0
+            refreshModel(autoSelectFirst = true, notifySelection = false)
+        }
     }
 
     private fun turnLabel(turn: TurnSnapshot): String {

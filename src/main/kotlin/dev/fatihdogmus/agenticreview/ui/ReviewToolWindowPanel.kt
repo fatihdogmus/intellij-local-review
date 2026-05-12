@@ -118,8 +118,9 @@ class ReviewToolWindowPanel(
 
     private fun refreshUi() {
         refreshReviewSelector()
-        changedFilesPanel.refreshTurns(turnSnapshotService)
         val review = manager.getCurrentReview()
+        changedFilesPanel.setTurnsEnabled(review?.target?.type == ReviewTargetType.UNCOMMITTED)
+        changedFilesPanel.refreshTurns(turnSnapshotService)
         contentPanel.removeAll()
         contentPanel.add(createReviewSelectorPanel(), BorderLayout.NORTH)
 
