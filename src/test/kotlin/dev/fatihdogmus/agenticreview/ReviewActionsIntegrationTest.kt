@@ -1,4 +1,4 @@
-package dev.agentreview.intellij
+package dev.fatihdogmus.agenticreview
 
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys

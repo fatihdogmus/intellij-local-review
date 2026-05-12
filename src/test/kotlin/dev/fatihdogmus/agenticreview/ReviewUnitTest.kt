@@ -1,4 +1,4 @@
-package dev.agentreview.intellij
+package dev.fatihdogmus.agenticreview
 
 import dev.fatihdogmus.agenticreview.diff.DiffContextExtractor
 import dev.fatihdogmus.agenticreview.export.AgentPromptBuilder

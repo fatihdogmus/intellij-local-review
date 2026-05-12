@@ -1,4 +1,4 @@
-package dev.agentreview.intellij
+package dev.fatihdogmus.agenticreview
 
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus

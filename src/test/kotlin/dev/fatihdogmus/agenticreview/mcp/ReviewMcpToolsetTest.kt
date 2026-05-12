@@ -1,4 +1,4 @@
-package dev.agentreview.intellij.mcp
+package dev.fatihdogmus.agenticreview.mcp
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture

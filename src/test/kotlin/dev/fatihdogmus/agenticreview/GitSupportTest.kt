@@ -1,4 +1,4 @@
-package dev.agentreview.intellij
+package dev.fatihdogmus.agenticreview
 
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.vcs.ProjectLevelVcsManager

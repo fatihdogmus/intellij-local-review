@@ -1,4 +1,4 @@
-package dev.agentreview.intellij.mcp
+package dev.fatihdogmus.agenticreview.mcp
 
 import com.intellij.mcpserver.McpToolFilter
 import com.intellij.mcpserver.impl.McpServerService
