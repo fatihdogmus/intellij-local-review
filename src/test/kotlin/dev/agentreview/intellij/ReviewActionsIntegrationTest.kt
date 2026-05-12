@@ -33,9 +33,9 @@ import com.intellij.vcs.log.impl.HashImpl
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.function.Consumer
 
 @TestApplication
 class ReviewActionsIntegrationTest {
@@ -239,35 +239,15 @@ class ReviewActionsIntegrationTest {
     }
 
     private fun fakeCommitSelection(withCommits: Boolean): VcsLogCommitSelection {
-        val commits: List<Any> = if (withCommits) listOf(Any()) else emptyList()
-
-        return Proxy.newProxyInstance(
-            javaClass.classLoader,
-            arrayOf(VcsLogCommitSelection::class.java),
-        ) { _, method, _ ->
-            when (method.name) {
-                "getCommits" -> commits
-                else -> null
-            }
-        } as VcsLogCommitSelection
+        return TestCommitSelection(
+            commits = if (withCommits) listOf(CommitId(HashImpl.build("1234567890abcdef1234567890abcdef12345678"), LocalFileSystem.getInstance().refreshAndFindFileByNioFile(Path.of(project.basePath!!))!!)) else emptyList(),
+        )
     }
 
     private fun realCommitSelection(hashes: List<String>, repoRoot: Path): VcsLogCommitSelection {
         val root = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(repoRoot) ?: error("root vf missing")
         val commits = hashes.map { CommitId(HashImpl.build(it), root) }
-        return Proxy.newProxyInstance(
-            javaClass.classLoader,
-            arrayOf(VcsLogCommitSelection::class.java),
-        ) { _, method, _ ->
-            when (method.name) {
-                "getCommits" -> commits
-                "getRows" -> IntArray(0)
-                "getIds" -> emptyList<Int>()
-                "getCachedMetadata", "getCachedFullDetails" -> emptyList<Any>()
-                "requestFullDetails" -> Unit
-                else -> null
-            }
-        } as VcsLogCommitSelection
+        return TestCommitSelection(commits)
     }
 
     private fun initGitRepo(): Path {
@@ -307,4 +287,15 @@ class ReviewActionsIntegrationTest {
         beforeContent = ReviewContent("before\n", "before", "src/Foo.kt"),
         afterContent = if (status == ChangedFileStatus.DELETED) null else ReviewContent("after\n", "after", "src/Foo.kt"),
     )
+
+    private class TestCommitSelection(
+        override val commits: List<CommitId>,
+    ) : VcsLogCommitSelection {
+        override val rows: IntArray = IntArray(0)
+        override val ids: List<Int> = emptyList()
+        override val cachedMetadata = emptyList<com.intellij.vcs.log.VcsCommitMetadata>()
+        override val cachedFullDetails = emptyList<com.intellij.vcs.log.VcsFullCommitDetails>()
+
+        override fun requestFullDetails(consumer: Consumer<in List<com.intellij.vcs.log.VcsFullCommitDetails>>) = Unit
+    }
 }

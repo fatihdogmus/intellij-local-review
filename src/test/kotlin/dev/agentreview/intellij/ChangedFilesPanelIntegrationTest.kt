@@ -12,6 +12,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.awt.Component
+import java.awt.Container
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.swing.JComboBox
@@ -58,6 +59,27 @@ class ChangedFilesPanelIntegrationTest {
         val seenLabel = findLabel(seenComponent, "Bar.kt")
         assertThat(seenLabel).isNotNull
         assertThat(seenLabel!!.font.isBold).isFalse()
+    }
+
+    @Test
+    fun rendererShowsRenameSubtitleStatusAndLineStats() {
+        val panel = ChangedFilesPanel()
+        val list = panelList(panel)
+        val renamed = ChangedFile(
+            filePath = "src/new/Foo.kt",
+            status = ChangedFileStatus.RENAMED,
+            beforeContent = ReviewContent("one\ntwo", "before", "src/old/Foo.kt"),
+            afterContent = ReviewContent("one\nthree\nfour", "after", "src/new/Foo.kt"),
+            previousFilePath = "src/old/Foo.kt",
+        )
+        panel.setReviewFiles(listOf(renamed), selectedFilePath = null, seenFileKeys = emptySet())
+
+        val component = list.cellRenderer.getListCellRendererComponent(list, renamed, 0, false, false) as JComponent
+
+        assertThat(findLabel(component, "* Foo.kt")).isNotNull
+        assertThat(findLabel(component, "src/old/Foo.kt -> src/new/Foo.kt")).isNotNull
+        assertThat(findLabel(component, "RENAMED")).isNotNull
+        assertThat(labels(component).any { it.text.contains("+2") && it.text.contains("-1") }).isTrue()
     }
 
     @Test
@@ -110,16 +132,19 @@ class ChangedFilesPanelIntegrationTest {
         assertThat(titleLabel(panel).text).isEqualTo("Turn Changed Files")
     }
 
-    private fun panelList(panel: ChangedFilesPanel): JList<ChangedFile> = field(panel, "list")
-    private fun turnCombo(panel: ChangedFilesPanel): JComboBox<*> = field(panel, "turnCombo")
-    private fun titleLabel(panel: ChangedFilesPanel): JLabel = field(panel, "titleLabel")
-
     @Suppress("UNCHECKED_CAST")
-    private fun <T> field(target: Any, name: String): T {
-        val field = target.javaClass.getDeclaredField(name)
-        field.isAccessible = true
-        return field.get(target) as T
-    }
+    private fun panelList(panel: ChangedFilesPanel): JList<ChangedFile> =
+        findComponents(panel.component).filterIsInstance<JList<*>>().single() as JList<ChangedFile>
+
+    private fun turnCombo(panel: ChangedFilesPanel): JComboBox<*> =
+        findComponents(panel.component)
+            .filterIsInstance<JComboBox<*>>()
+            .single { combo -> combo.itemCount > 0 && combo.getItemAt(0).toString() == "Review Changes" }
+
+    private fun titleLabel(panel: ChangedFilesPanel): JLabel =
+        findComponents(panel.component)
+            .filterIsInstance<JLabel>()
+            .first { it.text == "Changed Files" || it.text == "Turn Changed Files" }
 
     private fun findLabel(component: Component, text: String): JLabel? {
         if (component is JLabel && component.text == text) return component
@@ -146,5 +171,14 @@ class ChangedFilesPanelIntegrationTest {
         val output = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()
         check(exitCode == 0) { "git ${args.joinToString(" ")} failed: $output" }
+    }
+
+    private fun labels(component: Component): List<JLabel> = findComponents(component).filterIsInstance<JLabel>()
+
+    private fun findComponents(root: Component): List<Component> = buildList {
+        add(root)
+        if (root is Container) {
+            root.components.forEach { child -> addAll(findComponents(child)) }
+        }
     }
 }

@@ -1,12 +1,9 @@
 package dev.fatihdogmus.agenticreview.ui
 
 import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.progress.DumbProgressIndicator
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.project.DumbAwareAction
-import com.intellij.diff.comparison.ComparisonManager
-import com.intellij.diff.comparison.ComparisonPolicy
 import com.intellij.openapi.actionSystem.AnActionEvent
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
 import com.intellij.ui.JBColor
@@ -328,7 +325,7 @@ private class ChangedFileCellRenderer(
         statusBadge.foreground = statusForeground(value, isSelected, fg)
         statusBadge.background = if (isSelected) bg else statusBackground(value)
 
-        val lineStats = calculateLineStats(value)
+        val lineStats = estimateLineStats(value)
         stats.text = if (isSelected) {
             "+${lineStats.added}  -${lineStats.deleted}"
         } else {
@@ -360,25 +357,32 @@ private class ChangedFileCellRenderer(
         return if (path.isBlank()) value.filePath else path
     }
 
-    private fun calculateLineStats(value: ChangedFile): LineStats {
+    // Keep list rendering cheap on the EDT. This badge is only a summary, so we
+    // estimate the changed middle range instead of running the full diff engine.
+    private fun estimateLineStats(value: ChangedFile): LineStats {
         val before = value.beforeContent?.text.orEmpty()
         val after = value.afterContent?.text.orEmpty()
         if (before.isEmpty() && after.isEmpty()) return LineStats(0, 0)
         if (before.isEmpty()) return LineStats(countLines(after), 0)
         if (after.isEmpty()) return LineStats(0, countLines(before))
 
-        val fragments = ComparisonManager.getInstance().compareLines(
-            before,
-            after,
-            ComparisonPolicy.DEFAULT,
-            DumbProgressIndicator.INSTANCE,
-        )
-        var added = 0
-        var deleted = 0
-        for (fragment in fragments) {
-            deleted += fragment.endLine1 - fragment.startLine1
-            added += fragment.endLine2 - fragment.startLine2
+        val beforeLines = before.lines()
+        val afterLines = after.lines()
+
+        var prefix = 0
+        while (prefix < beforeLines.size && prefix < afterLines.size && beforeLines[prefix] == afterLines[prefix]) {
+            prefix += 1
         }
+
+        var beforeSuffix = beforeLines.lastIndex
+        var afterSuffix = afterLines.lastIndex
+        while (beforeSuffix >= prefix && afterSuffix >= prefix && beforeLines[beforeSuffix] == afterLines[afterSuffix]) {
+            beforeSuffix -= 1
+            afterSuffix -= 1
+        }
+
+        val deleted = (beforeSuffix - prefix + 1).coerceAtLeast(0)
+        val added = (afterSuffix - prefix + 1).coerceAtLeast(0)
         return LineStats(added, deleted)
     }
 

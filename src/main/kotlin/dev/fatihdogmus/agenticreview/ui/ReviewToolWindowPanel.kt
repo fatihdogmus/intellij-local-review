@@ -68,6 +68,8 @@ class ReviewToolWindowPanel(
     private val reviewSelector = JComboBox<Review>()
     private val createReviewButton = RoundedToolbarButton("Create Review")
     private val editReviewButton = RoundedToolbarButton("Edit")
+    private val reviewSelectorPanel = createReviewSelectorPanel()
+    private val mainContent = createMainContent()
     private var updatingReviewSelector = false
     private val stateListener: () -> Unit = { refreshUi() }
     private val turnStateListener: () -> Unit = { refreshUi() }
@@ -80,6 +82,8 @@ class ReviewToolWindowPanel(
         turnSnapshotService.addListener(turnStateListener)
         setContent(contentPanel)
         background = panelBackground
+        contentPanel.add(reviewSelectorPanel, BorderLayout.NORTH)
+        contentPanel.add(mainContent, BorderLayout.CENTER)
 
         reviewSelector.renderer = ReviewSelectorRenderer()
         reviewSelector.preferredSize = Dimension(250, reviewSelector.preferredSize.height)
@@ -121,20 +125,18 @@ class ReviewToolWindowPanel(
         val review = manager.getCurrentReview()
         changedFilesPanel.setTurnsEnabled(review?.target?.type == ReviewTargetType.UNCOMMITTED)
         changedFilesPanel.refreshTurns(turnSnapshotService)
-        contentPanel.removeAll()
-        contentPanel.add(createReviewSelectorPanel(), BorderLayout.NORTH)
 
         if (review != null) {
             val files = changedFilesByReviewId[review.id].orEmpty()
             changedFilesPanel.setReviewFiles(files, manager.currentFilePath, manager.seenFileKeys(review.id))
-            contentPanel.add(createMainContent(), BorderLayout.CENTER)
             loadChangedFilesIfNeeded(review)
             refreshDiff()
         } else {
+            changedFilesPanel.setReviewFiles(emptyList(), null, emptySet())
             diffPanel.showDiff(MessageDiffRequest("Select review from dropdown above."))
         }
-        revalidate()
-        repaint()
+        contentPanel.revalidate()
+        contentPanel.repaint()
     }
 
     private fun refreshDiff() {
@@ -161,7 +163,13 @@ class ReviewToolWindowPanel(
             diffPanel.showDiff(MessageDiffRequest("Select changed file to review."))
         } else {
             diffPanel.showDiff(diffRequestBuilder.buildForFile(reviewId, changedFile))
-            manager.markFileSeen(reviewId, changedFile)
+            if (manager.markFileSeen(reviewId, changedFile)) {
+                changedFilesPanel.setReviewFiles(
+                    changedFilesByReviewId[reviewId].orEmpty(),
+                    manager.currentFilePath,
+                    manager.seenFileKeys(reviewId),
+                )
+            }
         }
     }
 
@@ -185,7 +193,7 @@ class ReviewToolWindowPanel(
 
     private fun deleteChangedFile(changedFile: ChangedFile) {
         val review = manager.getCurrentReview() ?: return
-        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(Path.of(review.repositoryRoot, changedFile.filePath)) ?: return
+        val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(Path.of(review.repositoryRoot, changedFile.filePath)) ?: return
         val psiFile = PsiManager.getInstance(project).findFile(virtualFile) ?: return
         DeleteHandler.deletePsiElement(arrayOf(psiFile), project)
     }
@@ -406,7 +414,7 @@ class ReviewToolWindowPanel(
 
     private fun loadReviewFromFile() {
         val rootPath = manager.getCurrentReview()?.repositoryRoot ?: project.basePath ?: return
-        val rootFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(rootPath)
+        val rootFile = LocalFileSystem.getInstance().findFileByPath(rootPath)
         val descriptor = FileChooserDescriptorFactory.createSingleFileDescriptor("json").apply {
             title = "Load Review"
             description = "Select a saved Agentic Review JSON file"
@@ -442,7 +450,17 @@ class ReviewToolWindowPanel(
 
     private fun copyPrompt() {
         val review = manager.getCurrentReview() ?: return
-        manager.buildAgentPrompt(review.id)?.let { ExportUiSupport.copyToClipboard(project, it) }
+        object : Task.Backgroundable(project, "Building review prompt", false) {
+            private var prompt: String? = null
+
+            override fun run(indicator: ProgressIndicator) {
+                prompt = manager.buildAgentPrompt(review.id)
+            }
+
+            override fun onSuccess() {
+                prompt?.let { ExportUiSupport.copyToClipboard(project, it) }
+            }
+        }.queue()
     }
 
     private fun openChangedFile(changedFile: ChangedFile) {

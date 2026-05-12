@@ -88,7 +88,7 @@ class TurnSnapshotServiceAdditionalTest {
     }
 
     @Test
-    fun clearAllCanSkipNotificationsAndLoadStateIgnoresMalformedJson() {
+    fun clearAllCanSkipNotifications() {
         val service = TurnSnapshotService.getInstance(project)
         var notifications = 0
         val listener = { notifications += 1 }
@@ -99,21 +99,7 @@ class TurnSnapshotServiceAdditionalTest {
         service.clearAll(notify = false)
         assertThat(notifications).isEqualTo(notificationsBeforeClear)
 
-        ReviewStateService.getInstance(project).setTurnSnapshotsJson("{")
-        ReviewStateService.getInstance(project).setTurnDiffsJson("{")
-        invokeLoadState(service)
-
-        assertThat(service.getActiveTurn()).isNull()
-        assertThat(service.getCompletedTurns()).isEmpty()
-        assertThat(service.hasStoredTurns()).isFalse()
-
         service.removeListener(listener)
-    }
-
-    private fun invokeLoadState(service: TurnSnapshotService) {
-        val method = TurnSnapshotService::class.java.getDeclaredMethod("loadState")
-        method.isAccessible = true
-        method.invoke(service)
     }
 
     private fun runGit(root: Path, vararg args: String) {

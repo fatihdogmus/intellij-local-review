@@ -8,6 +8,7 @@ import dev.fatihdogmus.agenticreview.model.Review
 import dev.fatihdogmus.agenticreview.model.ReviewTarget
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
+import dev.fatihdogmus.agenticreview.persistence.SavedReviewArchive
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.vcs.BranchReviewMetadata
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
@@ -20,12 +21,14 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
 
 @TestApplication
 class ReviewManagerServiceTest {
     private val project by projectFixture()
+    private val json = Json { ignoreUnknownKeys = true }
 
     @BeforeEach
     fun resetTurnState() {
@@ -134,16 +137,43 @@ class ReviewManagerServiceTest {
     fun prepareSaveReviewUsesKebabCaseNameAndReviewId() {
         val manager = ReviewManagerService.getInstance(project)
         val tempDir = Files.createTempDirectory("agentic-review-save")
-        val review = seededCommitReview("save-plan")
+        val review = seededCommitReview("save-plan").apply {
+            target.parentHash = "parent-1"
+            target.commitHash = "commit-1"
+        }
         review.repositoryRoot = tempDir.toString()
         ReviewStateService.getInstance(project).addReview(review)
 
         val plan = manager.prepareSaveReview(review.id, "My Review Name")
+        val archive = json.decodeFromString<SavedReviewArchive>(plan!!.payload)
 
-        assertThat(plan).isNotNull
-        assertThat(plan!!.title).isEqualTo("My Review Name")
+        assertThat(plan.title).isEqualTo("My Review Name")
         assertThat(plan.filePath.fileName.toString()).isEqualTo("my-review-name-${review.id}.json")
         assertThat(manager.findReview(review.id)?.title).isEqualTo("My Review Name")
+        assertThat(archive.targetType).isEqualTo(ReviewTargetType.COMMIT)
+        assertThat(archive.beginCommit).isEqualTo("parent-1")
+        assertThat(archive.endCommit).isEqualTo("commit-1")
+    }
+
+    @Test
+    fun prepareSaveReviewPersistsCommitRangeBoundaries() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = Review(
+            id = "save-range",
+            title = "Range review",
+            target = ReviewTarget(type = ReviewTargetType.COMMIT_RANGE, baseRef = "base-2", headRef = "head-2"),
+            repositoryRoot = project.basePath!!,
+            createdAt = "2026-05-07T14:20:00+03:00",
+            updatedAt = "2026-05-07T14:20:00+03:00",
+        )
+        ReviewStateService.getInstance(project).addReview(review)
+
+        val plan = manager.prepareSaveReview(review.id, review.title)
+        val archive = json.decodeFromString<SavedReviewArchive>(plan!!.payload)
+
+        assertThat(archive.targetType).isEqualTo(ReviewTargetType.COMMIT_RANGE)
+        assertThat(archive.beginCommit).isEqualTo("base-2")
+        assertThat(archive.endCommit).isEqualTo("head-2")
     }
 
     @Test

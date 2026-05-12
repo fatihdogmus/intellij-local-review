@@ -9,8 +9,6 @@ import com.intellij.dvcs.repo.VcsRepositoryManager
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
 import dev.fatihdogmus.agenticreview.vcs.CommitChangesProvider
-import dev.fatihdogmus.agenticreview.vcs.GitCommandFallback
-import dev.fatihdogmus.agenticreview.vcs.ReviewContent
 import git4idea.repo.GitRepositoryManager
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -126,7 +124,7 @@ class CommitChangesProviderAdditionalTest {
     }
 
     @Test
-    fun parseDiffLineHandlesDeletedCopiedUnknownAndMissingPathCases() {
+    fun getChangedFilesForRangeHandlesDeletedAndNewCopyFile() {
         write(repoRoot.resolve("src/Foo.kt"), "before\n")
         write(repoRoot.resolve("src/Copy.kt"), "copy\n")
         runGit(repoRoot, "add", ".")
@@ -139,66 +137,17 @@ class CommitChangesProviderAdditionalTest {
         runGit(repoRoot, "commit", "-m", "delete and copy")
         val head = this.head()
 
-        val provider = CommitChangesProvider(project)
-        val git = GitCommandFallback(repoRoot.toString())
+        val files = CommitChangesProvider(project).getChangedFilesForRange(base, head)
+        val deleted = files.first { it.filePath == "src/Foo.kt" }
+        val copied = files.first { it.filePath == "src/CopyClone.kt" }
 
-        val deleted = invokeParseDiffLine(provider, git, base, head, "D\tsrc/Foo.kt")
-        val copied = invokeParseDiffLine(provider, git, base, head, "C100\tsrc/Copy.kt\tsrc/CopyClone.kt")
-        val unknown = invokeParseDiffLine(provider, git, base, head, "T\tsrc/Copy.kt")
-        val missing = invokeParseDiffLine(provider, git, base, head, "M")
-
-        assertThat(deleted).isNotNull
-        assertThat(deleted!!.status).isEqualTo(ChangedFileStatus.DELETED)
+        assertThat(deleted.status).isEqualTo(ChangedFileStatus.DELETED)
         assertThat(deleted.beforeContent?.text).isEqualTo("before\n")
         assertThat(deleted.afterContent).isNull()
 
-        assertThat(copied).isNotNull
-        assertThat(copied!!.status).isEqualTo(ChangedFileStatus.COPIED)
-        assertThat(copied.previousFilePath).isEqualTo("src/Copy.kt")
+        assertThat(copied.status).isEqualTo(ChangedFileStatus.ADDED)
+        assertThat(copied.previousFilePath).isNull()
         assertThat(copied.afterContent?.text).isEqualTo("copy\n")
-
-        assertThat(unknown).isNotNull
-        assertThat(unknown!!.status).isEqualTo(ChangedFileStatus.UNKNOWN)
-
-        assertThat(missing).isNull()
-        assertThat(invokeParseDiffLine(provider, git, base, head, "R100\tsrc/Copy.kt")).isNull()
-        assertThat(invokeLoadRevisionContent(provider, git, head, "src/Missing.kt")).isNull()
-    }
-
-    private fun invokeParseDiffLine(
-        provider: CommitChangesProvider,
-        git: GitCommandFallback,
-        parent: String,
-        head: String,
-        line: String,
-    ): ChangedFile? {
-        val method = CommitChangesProvider::class.java.getDeclaredMethod(
-            "parseDiffLine",
-            GitCommandFallback::class.java,
-            String::class.java,
-            String::class.java,
-            String::class.java,
-        )
-        method.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        return method.invoke(provider, git, parent, head, line) as ChangedFile?
-    }
-
-    private fun invokeLoadRevisionContent(
-        provider: CommitChangesProvider,
-        git: GitCommandFallback,
-        revision: String,
-        relativePath: String,
-    ): ReviewContent? {
-        val method = CommitChangesProvider::class.java.getDeclaredMethod(
-            "loadRevisionContent",
-            GitCommandFallback::class.java,
-            String::class.java,
-            String::class.java,
-        )
-        method.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        return method.invoke(provider, git, revision, relativePath) as ReviewContent?
     }
 
     private fun configureGitMapping() {

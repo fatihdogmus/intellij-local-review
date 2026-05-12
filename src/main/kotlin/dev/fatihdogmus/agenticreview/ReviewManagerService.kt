@@ -108,7 +108,6 @@ class ReviewManagerService(private val project: Project) : Disposable {
     fun selectFile(filePath: String?) {
         if (currentFilePath == filePath) return
         currentFilePath = filePath
-        notifyChanged()
     }
 
     fun openDefaultReview() {
@@ -370,7 +369,6 @@ class ReviewManagerService(private val project: Project) : Disposable {
             filePath = changedFile.filePath,
             seenAt = nowIso(),
         )
-        touch(review)
         return true
     }
 
