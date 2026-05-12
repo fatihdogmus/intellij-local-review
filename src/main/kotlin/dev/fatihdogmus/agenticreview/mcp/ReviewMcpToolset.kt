@@ -19,11 +19,6 @@ import dev.fatihdogmus.agenticreview.model.ReviewComment
 import dev.fatihdogmus.agenticreview.model.ReviewStatus
 import dev.fatihdogmus.agenticreview.model.ReviewTarget
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
-import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotListResult
-import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotResult
-import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
-import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotSummary
-import dev.fatihdogmus.agenticreview.snapshot.TurnToolCall
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -146,93 +141,6 @@ class ReviewMcpToolset : McpToolset {
             else -> mcpFail("Unsupported export format '$format'. Supported: json, markdown")
         }
         return json.encodeToString(ExportResult(format = normalizedFormat, content = content))
-    }
-
-    @McpTool(name = "review_turn_snapshot_begin")
-    @McpDescription("Start recording an agent turn snapshot. Call before an agent begins editing files.")
-    suspend fun reviewTurnSnapshotBegin(
-        @McpDescription("OpenCode session id")
-        sessionId: String,
-        @McpDescription("OpenCode step/turn id")
-        stepId: String,
-        @McpDescription("Absolute path to the project root directory")
-        projectPath: String,
-        @McpDescription("Agent name (e.g. primary, codex)")
-        agent: String? = null,
-        @McpDescription("Model identifier")
-        model: String? = null,
-    ): String {
-        val service = TurnSnapshotService.getInstance(currentProject())
-        val turn = service.beginTurn(
-            sessionId = sessionId,
-            stepId = stepId,
-            projectPath = projectPath,
-            agent = agent,
-            model = model,
-        )
-        return json.encodeToString(TurnSnapshotResult(ok = true, turnId = turn.id))
-    }
-
-    @McpTool(name = "review_turn_snapshot_end")
-    @McpDescription("Finish recording an agent turn snapshot. Call after an agent finishes editing.")
-    suspend fun reviewTurnSnapshotEnd(
-        @McpDescription("OpenCode session id")
-        sessionId: String,
-        @McpDescription("OpenCode step/turn id")
-        stepId: String,
-        @McpDescription("Turn status: completed, failed, or overlapped")
-        status: String = "completed",
-        @McpDescription("JSON array of file paths changed during the turn")
-        changedPathsJson: String? = null,
-        @McpDescription("JSON array of tool call metadata objects")
-        toolCallsJson: String? = null,
-    ): String {
-        val service = TurnSnapshotService.getInstance(currentProject())
-        val changedPaths = changedPathsJson?.let { parseStringList(it) }
-        val toolCalls = toolCallsJson?.let { parseToolCalls(it) }
-        val turn = service.endTurn(
-            sessionId = sessionId,
-            stepId = stepId,
-            status = status,
-            changedPaths = changedPaths,
-            toolCalls = toolCalls,
-        )
-        if (turn == null) {
-            return json.encodeToString(TurnSnapshotResult(ok = false, turnId = "", error = "No active turn found for session $sessionId"))
-        }
-        return json.encodeToString(TurnSnapshotResult(ok = true, turnId = turn.id))
-    }
-
-    @McpTool(name = "review_list_turn_snapshots")
-    @McpDescription("List completed turn snapshots for the current project.")
-    suspend fun reviewListTurnSnapshots(): String {
-        val service = TurnSnapshotService.getInstance(currentProject())
-        val turns = service.getCompletedTurns().map { turn ->
-            TurnSnapshotSummary(
-                id = turn.id,
-                sessionId = turn.sessionId,
-                stepId = turn.stepId,
-                agent = turn.agent,
-                model = turn.model,
-                startedAt = turn.startedAt,
-                endedAt = turn.endedAt,
-                status = turn.status,
-                changedFileCount = turn.changedPaths.size,
-            )
-        }
-        return json.encodeToString(TurnSnapshotListResult(turns))
-    }
-
-    private fun parseStringList(raw: String): List<String> {
-        val trimmed = raw.trim()
-        if (!trimmed.startsWith("[")) return emptyList()
-        return json.decodeFromString<List<String>>(trimmed)
-    }
-
-    private fun parseToolCalls(raw: String): List<TurnToolCall> {
-        val trimmed = raw.trim()
-        if (!trimmed.startsWith("[")) return emptyList()
-        return json.decodeFromString<List<TurnToolCall>>(trimmed)
     }
 
     private suspend fun manager(): ReviewManagerService = ReviewManagerService.getInstance(currentProject())
