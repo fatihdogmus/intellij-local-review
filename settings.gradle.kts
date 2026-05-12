@@ -4,7 +4,7 @@ rootProject.name = "Agentic Review"
 
 pluginManagement {
     plugins {
-        id("org.jetbrains.kotlin.jvm") version "2.3.0"
+        id("org.jetbrains.kotlin.jvm") version "2.3.21"
         id("org.jetbrains.kotlin.plugin.serialization") version "2.3.0"
     }
 }
