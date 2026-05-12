@@ -6,8 +6,5 @@
       "url": "http://127.0.0.1:64342/sse",
       "headers": {}
     }
-  },
-  "plugin": [
-    "file://./.opencode/plugins/agentic-review.ts"
-  ]
+  }
 }

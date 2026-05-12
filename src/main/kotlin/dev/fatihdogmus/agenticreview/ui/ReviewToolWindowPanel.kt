@@ -26,12 +26,13 @@ import dev.fatihdogmus.agenticreview.editor.ReviewPageManager
 import dev.fatihdogmus.agenticreview.ReviewFileNavigator
 import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.VcsLogReviewSupport
-import dev.fatihdogmus.agenticreview.model.CommentStatus
 import dev.fatihdogmus.agenticreview.diff.DiffRequestBuilder
 import dev.fatihdogmus.agenticreview.diff.ReviewDiffPanel
 import dev.fatihdogmus.agenticreview.export.ExportUiSupport
 import dev.fatihdogmus.agenticreview.model.Review
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
+import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshot
+import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import java.awt.BorderLayout
 import java.awt.Color
@@ -69,11 +70,14 @@ class ReviewToolWindowPanel(
     private val editReviewButton = RoundedToolbarButton("Edit")
     private var updatingReviewSelector = false
     private val stateListener: () -> Unit = { refreshUi() }
+    private val turnStateListener: () -> Unit = { refreshUi() }
     private val changedFilesByReviewId = mutableMapOf<String, List<ChangedFile>>()
     private val changedFilesLoadSequence = AtomicInteger()
+    private val turnSnapshotService = TurnSnapshotService.getInstance(project)
 
     init {
         manager.addListener(stateListener)
+        turnSnapshotService.addListener(turnStateListener)
         setContent(contentPanel)
         background = panelBackground
 
@@ -97,6 +101,9 @@ class ReviewToolWindowPanel(
         changedFilesPanel.onDeleteRequested = { changedFile ->
             deleteChangedFile(changedFile)
         }
+        changedFilesPanel.onTurnChanged = { turn ->
+            refreshDiffForTurn(turn)
+        }
 
         refreshUi()
     }
@@ -106,32 +113,36 @@ class ReviewToolWindowPanel(
 
     override fun dispose() {
         manager.removeListener(stateListener)
+        turnSnapshotService.removeListener(turnStateListener)
     }
 
     private fun refreshUi() {
         refreshReviewSelector()
+        changedFilesPanel.refreshTurns(turnSnapshotService)
         val review = manager.getCurrentReview()
         contentPanel.removeAll()
         contentPanel.add(createReviewSelectorPanel(), BorderLayout.NORTH)
 
-        if (review == null) {
-            revalidate()
-            repaint()
-            return
+        if (review != null) {
+            val files = changedFilesByReviewId[review.id].orEmpty()
+            changedFilesPanel.setReviewFiles(files, manager.currentFilePath, manager.seenFileKeys(review.id))
+            contentPanel.add(createMainContent(), BorderLayout.CENTER)
+            loadChangedFilesIfNeeded(review)
+            refreshDiff()
+        } else {
+            diffPanel.showDiff(MessageDiffRequest("Select review from dropdown above."))
         }
-
-        val files = changedFilesByReviewId[review.id].orEmpty()
-        changedFilesPanel.setFiles(files, manager.currentFilePath, commentCountsByPath(review), manager.seenFileKeys(review.id))
-
-        contentPanel.add(createMainContent(), BorderLayout.CENTER)
-        loadChangedFilesIfNeeded(review)
-        refreshDiff()
         revalidate()
         repaint()
     }
 
     private fun refreshDiff() {
         val changedFile = changedFilesPanel.selectedFile()
+        val turn = changedFilesPanel.selectedTurn()
+        if (turn != null) {
+            refreshDiffForTurn(turn)
+            return
+        }
         val reviewId = manager.currentReviewId
         val review = manager.getCurrentReview()
         if (reviewId == null) {
@@ -150,6 +161,24 @@ class ReviewToolWindowPanel(
         } else {
             diffPanel.showDiff(diffRequestBuilder.buildForFile(reviewId, changedFile))
             manager.markFileSeen(reviewId, changedFile)
+        }
+    }
+
+    private fun refreshDiffForTurn(turn: TurnSnapshot?) {
+        if (turn == null) return
+        val diffs = turnSnapshotService.getTurnDiffs(turn.id)
+        if (diffs.isEmpty()) {
+            diffPanel.showDiff(MessageDiffRequest("No changed files recorded for this turn."))
+            return
+        }
+        val changedFile = changedFilesPanel.selectedFile()
+        if (changedFile == null) {
+            diffPanel.showDiff(MessageDiffRequest("Select changed file to review."))
+            return
+        }
+        val matchedDiff = diffs.firstOrNull { it.filePath == changedFile.filePath }
+        if (matchedDiff != null) {
+            diffPanel.showDiff(diffRequestBuilder.buildForFile(turn.id, matchedDiff))
         }
     }
 
@@ -174,7 +203,7 @@ class ReviewToolWindowPanel(
                 changedFilesByReviewId[review.id] = changedFiles
                 manager.syncSeenFiles(review.id, changedFiles, notify = false)
                 if (requestId == changedFilesLoadSequence.get() && manager.currentReviewId == review.id) {
-                    changedFilesPanel.setFiles(changedFiles, manager.currentFilePath, commentCountsByPath(review), manager.seenFileKeys(review.id))
+                    changedFilesPanel.setReviewFiles(changedFiles, manager.currentFilePath, manager.seenFileKeys(review.id))
                     refreshDiff()
                 }
             }
@@ -308,6 +337,10 @@ class ReviewToolWindowPanel(
                 override fun actionPerformed(event: AnActionEvent) {
                     loadReviewFromFile()
                 }
+
+                override fun update(event: AnActionEvent) {
+                    event.presentation.isEnabled = manager.canSaveReview(selectedReview())
+                }
             })
         }
         JBPopupFactory.getInstance()
@@ -416,14 +449,6 @@ class ReviewToolWindowPanel(
         ReviewFileNavigator.openChangedFile(project, review.repositoryRoot, changedFile)
     }
 
-    private fun commentCountsByPath(review: Review): Map<String, FileCommentCounts> =
-        review.comments.groupBy { it.filePath }.mapValues { (_, comments) ->
-            FileCommentCounts(
-                open = comments.count { it.status == CommentStatus.OPEN },
-                resolved = comments.count { it.status != CommentStatus.OPEN },
-            )
-        }
-
     private fun runReviewCreationTask(title: String, action: () -> Unit) {
         object : Task.Backgroundable(project, title, false) {
             override fun run(indicator: ProgressIndicator) {
@@ -450,8 +475,8 @@ private class ReviewSelectorRenderer : ListCellRenderer<Review> {
         val component = delegate.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
         if (component is JLabel) {
             component.text = value?.let {
-                val openCount = it.comments.count { comment -> comment.status == CommentStatus.OPEN }
-                val resolvedCount = it.comments.count { comment -> comment.status != CommentStatus.OPEN }
+                val openCount = it.comments.count { comment -> comment.status == dev.fatihdogmus.agenticreview.model.CommentStatus.OPEN }
+                val resolvedCount = it.comments.count { comment -> comment.status != dev.fatihdogmus.agenticreview.model.CommentStatus.OPEN }
                 val countText = listOfNotNull(
                     openCount.takeIf { count -> count > 0 }?.let { count -> "$count Open" },
                     resolvedCount.takeIf { count -> count > 0 }?.let { count -> "$count Resolved" },

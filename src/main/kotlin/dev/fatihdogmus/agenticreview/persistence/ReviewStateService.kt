@@ -31,6 +31,18 @@ class ReviewStateService : PersistentStateComponent<ReviewState> {
 
     fun findReview(reviewId: String): Review? = state.reviews.firstOrNull { it.id == reviewId }
 
+    fun turnSnapshotsJson(): String = state.turnSnapshotsJson
+
+    fun setTurnSnapshotsJson(value: String) {
+        state.turnSnapshotsJson = value
+    }
+
+    fun turnDiffsJson(): String = state.turnDiffsJson
+
+    fun setTurnDiffsJson(value: String) {
+        state.turnDiffsJson = value
+    }
+
     companion object {
         fun getInstance(project: Project): ReviewStateService = project.getService(ReviewStateService::class.java)
     }

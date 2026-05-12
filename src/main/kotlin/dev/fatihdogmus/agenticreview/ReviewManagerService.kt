@@ -23,6 +23,7 @@ import dev.fatihdogmus.agenticreview.persistence.ReviewLoadResult
 import dev.fatihdogmus.agenticreview.persistence.ReviewSavePlan
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import dev.fatihdogmus.agenticreview.persistence.SavedReviewArchive
+import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.util.nowIso
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.BranchReviewMetadata
@@ -45,6 +46,7 @@ import java.util.UUID
 @Service(Service.Level.PROJECT)
 class ReviewManagerService(private val project: Project) : Disposable {
     private val stateService = ReviewStateService.getInstance(project)
+    private val turnSnapshotService = TurnSnapshotService.getInstance(project)
     private val diffContextExtractor = DiffContextExtractor()
     private val listeners = mutableSetOf<() -> Unit>()
     private val archiveJson = Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }
@@ -430,14 +432,21 @@ class ReviewManagerService(private val project: Project) : Disposable {
         val hasChanges = hasUncommittedChanges()
         val currentHeadHash = currentHeadHashSupplier()
         val headChanged = currentHeadHash != null && currentHeadHash != keepReview.target.commitHash
-        val clearedComments = if ((headChanged || !hasChanges) && keepReview.comments.isNotEmpty()) {
+        val shouldClearUncommittedState = headChanged || !hasChanges
+        val clearedComments = if (shouldClearUncommittedState && keepReview.comments.isNotEmpty()) {
             keepReview.comments.clear()
             true
         } else {
             false
         }
-        val clearedSeenFiles = if ((headChanged || !hasChanges) && keepReview.seenFiles.isNotEmpty()) {
+        val clearedSeenFiles = if (shouldClearUncommittedState && keepReview.seenFiles.isNotEmpty()) {
             keepReview.seenFiles.clear()
+            true
+        } else {
+            false
+        }
+        val clearedTurns = if (shouldClearUncommittedState && turnSnapshotService.hasStoredTurns()) {
+            turnSnapshotService.clearAll()
             true
         } else {
             false
@@ -445,14 +454,14 @@ class ReviewManagerService(private val project: Project) : Disposable {
         if (headChanged) {
             keepReview.target.commitHash = currentHeadHash
         }
-        if (headChanged || clearedComments || clearedSeenFiles) {
+        if (headChanged || clearedComments || clearedSeenFiles || clearedTurns) {
             keepReview.updatedAt = nowIso()
         }
         val shouldSelectUncommitted = currentReviewId == null
         if ((!hasChanges || headChanged) && currentReviewId == keepReview.id) {
             currentFilePath = null
         }
-        if (removedIds.isEmpty() && !shouldSelectUncommitted && !clearedComments && !clearedSeenFiles && !headChanged) return false
+        if (removedIds.isEmpty() && !shouldSelectUncommitted && !clearedComments && !clearedSeenFiles && !clearedTurns && !headChanged) return false
 
         removedIds.forEach(stateService::removeReview)
 

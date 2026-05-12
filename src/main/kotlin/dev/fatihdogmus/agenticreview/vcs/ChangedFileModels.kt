@@ -1,7 +1,9 @@
 package dev.fatihdogmus.agenticreview.vcs
 
 import java.security.MessageDigest
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class ChangedFile(
     val filePath: String,
     val status: ChangedFileStatus,
@@ -10,6 +12,7 @@ data class ChangedFile(
     val previousFilePath: String? = null,
 )
 
+@Serializable
 enum class ChangedFileStatus {
     ADDED,
     MODIFIED,
@@ -19,6 +22,7 @@ enum class ChangedFileStatus {
     UNKNOWN,
 }
 
+@Serializable
 data class ReviewContent(
     val text: String,
     val revisionTitle: String,
