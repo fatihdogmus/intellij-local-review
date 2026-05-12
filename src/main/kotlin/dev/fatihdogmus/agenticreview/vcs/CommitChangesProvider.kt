@@ -24,10 +24,22 @@ class CommitChangesProvider(private val project: Project) {
     }
 
     private fun currentBranchReviewBaseOrNull(): Pair<String, String>? {
-        val repository = GitRepositoryManager.getInstance(project).repositories.firstOrNull() ?: return null
-        val currentBranch = repository.currentBranchName ?: return null
+        val repository = GitRepositoryManager.getInstance(project).repositories.firstOrNull()
+        val repositoryRoot = repository?.root?.path ?: GitRepositoryResolver(project).resolveRepositoryRoot()
+        val git = GitCommandFallback(repositoryRoot)
+        val currentBranch = repository?.currentBranchName
+            ?: git.runOrNull("rev-parse", "--abbrev-ref", "HEAD")?.trim()?.takeUnless { it.isBlank() || it == "HEAD" }
+            ?: return null
         if (currentBranch == "main" || currentBranch == "master") return null
-        val branches = repository.branches.localBranches.map { it.name }.toSet()
+        val branches = repository?.branches?.localBranches
+            ?.map { it.name }
+            ?.toSet()
+            ?.takeIf { it.isNotEmpty() }
+            ?: git.run("for-each-ref", "--format=%(refname:short)", "refs/heads")
+                .lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .toSet()
         val baseBranch = when {
             "main" in branches -> "main"
             "master" in branches -> "master"

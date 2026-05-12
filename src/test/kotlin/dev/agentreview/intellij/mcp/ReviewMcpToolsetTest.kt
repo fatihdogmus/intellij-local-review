@@ -4,9 +4,13 @@ import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.mcp.CommentListResult
+import dev.fatihdogmus.agenticreview.mcp.ExportResult
 import dev.fatihdogmus.agenticreview.mcp.MutationResult
 import dev.fatihdogmus.agenticreview.mcp.ReviewMcpToolset
 import dev.fatihdogmus.agenticreview.mcp.ReviewResult
+import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotListResult
+import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotResult
+import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.model.CommentStatus
 import dev.fatihdogmus.agenticreview.model.DiffSide
 import dev.fatihdogmus.agenticreview.model.Review
@@ -110,6 +114,200 @@ class ReviewMcpToolsetTest {
         assertThat(result.review.openCommentCount).isEqualTo(1)
         assertThat(result.review.resolvedCommentCount).isEqualTo(1)
         assertThat(result.review.comments).hasSize(2)
+    }
+
+    @Test
+    suspend fun reviewGetReviewCanExcludeCommentsAndUseLatestOpenSelector() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = seededReview(
+            suffix = "latest-open",
+            target = ReviewTarget(type = ReviewTargetType.COMMIT, commitHash = "latest-open-1", parentHash = "0000000"),
+        )
+        ReviewStateService.getInstance(project).addReview(review)
+        manager.selectReview(review.id)
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 2, "open")
+
+        val result = json.decodeFromString<ReviewResult>(
+            ReviewMcpToolset().reviewGetReview(selector = "latest-open", includeComments = false),
+        )
+
+        assertThat(result.review.id).isEqualTo(review.id)
+        assertThat(result.review.comments).isEmpty()
+        assertThat(result.review.openCommentCount).isEqualTo(1)
+    }
+
+    @Test
+    suspend fun reviewGetReviewCanResolveUncommittedSelectorAndHideResolvedComments() {
+        val manager = ReviewManagerService.getInstance(project)
+        val review = manager.getCurrentReview() ?: error("current review missing")
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 2, "open")
+        manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 3, "resolved")
+        val resolved = manager.findReview(review.id)!!.comments.last().id
+        manager.markCommentResolved(resolved)
+
+        val result = json.decodeFromString<ReviewResult>(
+            ReviewMcpToolset().reviewGetReview(selector = "uncommitted", includeComments = true, includeResolved = false),
+        )
+
+        assertThat(result.review.target.type).isEqualTo(ReviewTargetType.UNCOMMITTED)
+        assertThat(result.review.comments).singleElement().extracting("body").isEqualTo("open")
+    }
+
+    @Test
+    suspend fun reviewExportSupportsJsonFormat() {
+        val review = seededReview(
+            suffix = "export-json",
+            target = ReviewTarget(type = ReviewTargetType.COMMIT, commitHash = "json-1", parentHash = "0000000"),
+        )
+        ReviewStateService.getInstance(project).addReview(review)
+
+        val result = json.decodeFromString<ExportResult>(
+            ReviewMcpToolset().reviewExport(reviewId = review.id, format = "json"),
+        )
+
+        assertThat(result.format).isEqualTo("json")
+        assertThat(result.content).contains("\"id\": \"${review.id}\"")
+    }
+
+    @Test
+    suspend fun reviewTurnSnapshotBeginAndEndLifecycle() {
+        val sessionId = "session-1"
+        val stepId = "step-1"
+
+        val beginResult = json.decodeFromString<TurnSnapshotResult>(
+            ReviewMcpToolset().reviewTurnSnapshotBegin(
+                sessionId = sessionId,
+                stepId = stepId,
+                projectPath = project.basePath!!,
+                agent = "primary",
+                model = "claude-4",
+            ),
+        )
+
+        assertThat(beginResult.ok).isTrue()
+        assertThat(beginResult.turnId).isNotBlank()
+
+        val endResult = json.decodeFromString<TurnSnapshotResult>(
+            ReviewMcpToolset().reviewTurnSnapshotEnd(
+                sessionId = sessionId,
+                stepId = stepId,
+                status = "completed",
+            ),
+        )
+
+        assertThat(endResult.ok).isTrue()
+        assertThat(endResult.turnId).isEqualTo(beginResult.turnId)
+
+        val listResult = json.decodeFromString<TurnSnapshotListResult>(
+            ReviewMcpToolset().reviewListTurnSnapshots(),
+        )
+
+        assertThat(listResult.turns).hasSize(1)
+        assertThat(listResult.turns.single().sessionId).isEqualTo(sessionId)
+        assertThat(listResult.turns.single().status).isEqualTo("completed")
+        assertThat(listResult.turns.single().agent).isEqualTo("primary")
+    }
+
+    @Test
+    suspend fun reviewTurnSnapshotEndWithoutActiveTurnReturnsError() {
+        val result = json.decodeFromString<TurnSnapshotResult>(
+            ReviewMcpToolset().reviewTurnSnapshotEnd(
+                sessionId = "nonexistent",
+                stepId = "step-1",
+            ),
+        )
+
+        assertThat(result.ok).isFalse()
+        assertThat(result.turnId).isBlank()
+    }
+
+    @Test
+    suspend fun reviewTurnSnapshotBeginOverlapsExisting() {
+        val session1 = "session-1"
+        val session2 = "session-2"
+
+        val begin1 = json.decodeFromString<TurnSnapshotResult>(
+            ReviewMcpToolset().reviewTurnSnapshotBegin(
+                sessionId = session1,
+                stepId = "step-1",
+                projectPath = project.basePath!!,
+            ),
+        )
+        assertThat(begin1.ok).isTrue()
+
+        val begin2 = json.decodeFromString<TurnSnapshotResult>(
+            ReviewMcpToolset().reviewTurnSnapshotBegin(
+                sessionId = session2,
+                stepId = "step-2",
+                projectPath = project.basePath!!,
+            ),
+        )
+        assertThat(begin2.ok).isTrue()
+
+        val listResult = json.decodeFromString<TurnSnapshotListResult>(
+            ReviewMcpToolset().reviewListTurnSnapshots(),
+        )
+
+        assertThat(listResult.turns).hasSize(1)
+        assertThat(listResult.turns.single().sessionId).isEqualTo(session1)
+        assertThat(listResult.turns.single().status).isEqualTo("overlapped")
+    }
+
+    @Test
+    suspend fun reviewTurnSnapshotBeginSucceedsWithoutOptionalFields() {
+        val result = json.decodeFromString<TurnSnapshotResult>(
+            ReviewMcpToolset().reviewTurnSnapshotBegin(
+                sessionId = "session-min",
+                stepId = "step-min",
+                projectPath = project.basePath!!,
+            ),
+        )
+
+        assertThat(result.ok).isTrue()
+
+        val listResult = json.decodeFromString<TurnSnapshotListResult>(
+            ReviewMcpToolset().reviewListTurnSnapshots(),
+        )
+
+        assertThat(listResult.turns).hasSize(0)
+
+        ReviewMcpToolset().reviewTurnSnapshotEnd(
+            sessionId = "session-min",
+            stepId = "step-min",
+        )
+    }
+
+    @Test
+    suspend fun reviewTurnSnapshotEndWithChangedPaths() {
+        val sessionId = "session-paths"
+
+        ReviewMcpToolset().reviewTurnSnapshotBegin(
+            sessionId = sessionId,
+            stepId = "step-paths",
+            projectPath = project.basePath!!,
+        )
+
+        val changedPaths = """["src/main/Foo.kt", "src/test/Bar.kt"]"""
+        val toolCalls = """[{"callId":"c1","tool":"edit","changedPaths":["src/main/Foo.kt"],"metadataJson":null}]"""
+
+        val endResult = json.decodeFromString<TurnSnapshotResult>(
+            ReviewMcpToolset().reviewTurnSnapshotEnd(
+                sessionId = sessionId,
+                stepId = "step-paths",
+                status = "completed",
+                changedPathsJson = changedPaths,
+                toolCallsJson = toolCalls,
+            ),
+        )
+
+        assertThat(endResult.ok).isTrue()
+
+        val listResult = json.decodeFromString<TurnSnapshotListResult>(
+            ReviewMcpToolset().reviewListTurnSnapshots(),
+        )
+
+        assertThat(listResult.turns).hasSize(1)
+        assertThat(listResult.turns.single().changedFileCount).isEqualTo(2)
     }
 
     private fun seededReview(suffix: String, target: ReviewTarget = ReviewTarget(type = ReviewTargetType.UNCOMMITTED)): Review = Review(

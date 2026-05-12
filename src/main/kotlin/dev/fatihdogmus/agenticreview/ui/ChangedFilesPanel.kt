@@ -1,12 +1,9 @@
 package dev.fatihdogmus.agenticreview.ui
 
 import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.progress.DumbProgressIndicator
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.project.DumbAwareAction
-import com.intellij.diff.comparison.ComparisonManager
-import com.intellij.diff.comparison.ComparisonPolicy
 import com.intellij.openapi.actionSystem.AnActionEvent
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
 import com.intellij.ui.JBColor
@@ -16,19 +13,26 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshot
+import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.seenKey
 import java.awt.BorderLayout
 import java.awt.Color
+import java.awt.Component
 import java.awt.Dimension
 import java.awt.Font
 import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
+import java.time.Duration
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
+import javax.swing.DefaultListCellRenderer
 import javax.swing.DefaultListModel
 import javax.swing.JComboBox
 import javax.swing.JComponent
+import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.ListCellRenderer
@@ -38,32 +42,36 @@ class ChangedFilesPanel {
     private val model = DefaultListModel<ChangedFile>()
     private val list = JBList(model)
     private var updatingModel = false
-    private var files: List<ChangedFile> = emptyList()
-    private var selectedFilePath: String? = null
-    private var commentCountsByPath: Map<String, FileCommentCounts> = emptyMap()
+    private var reviewFiles: List<ChangedFile> = emptyList()
+    private var turnFilesById: Map<String, List<ChangedFile>> = emptyMap()
     private var seenFileKeys: Set<String> = emptySet()
+    private var selectedFilePath: String? = null
+    private var turnsEnabled = false
     private val titleLabel = JBLabel("Changed Files")
-    private val filterCombo = JComboBox(SeenFilter.entries.toTypedArray())
-    private val sortCombo = JComboBox(SeenSort.entries.toTypedArray())
-    val component: JComponent = JBPanel<JBPanel<*>>(BorderLayout())
-
+    private val turnCombo = JComboBox<TurnComboItem>()
     var onSelectionChanged: ((ChangedFile?) -> Unit)? = null
     var onOpenRequested: ((ChangedFile) -> Unit)? = null
     var onDeleteRequested: ((ChangedFile) -> Unit)? = null
+    var onTurnChanged: ((TurnSnapshot?) -> Unit)? = null
+
+    val component: JComponent = JBPanel<JBPanel<*>>(BorderLayout())
 
     init {
-        list.cellRenderer = ChangedFileCellRenderer(
-            commentCountsProvider = { changedFile -> commentCountsByPath[changedFile.filePath] ?: FileCommentCounts() },
-            seenProvider = { changedFile -> changedFile.seenKey() in seenFileKeys },
-        )
+        list.cellRenderer = ChangedFileCellRenderer { changedFile ->
+            if (selectedTurn() != null) null else changedFile.seenKey() !in seenFileKeys
+        }
         list.background = UIManager.getColor("List.background") ?: UIUtil.getListBackground()
         list.selectionBackground = UIManager.getColor("List.selectionBackground") ?: UIUtil.getListSelectionBackground(true)
         list.selectionForeground = UIManager.getColor("List.selectionForeground") ?: UIUtil.getListForeground(true, true)
         list.border = JBUI.Borders.empty(8, 10)
-        filterCombo.selectedItem = SeenFilter.ALL
-        sortCombo.selectedItem = SeenSort.DEFAULT
-        filterCombo.addActionListener { refreshModel(autoSelectFirst = false, notifySelection = true) }
-        sortCombo.addActionListener { refreshModel(autoSelectFirst = false, notifySelection = true) }
+
+        turnCombo.renderer = TurnComboRenderer()
+        turnCombo.addActionListener {
+            refreshModel(autoSelectFirst = true, notifySelection = true)
+            val selected = (turnCombo.selectedItem as? TurnComboItem)?.turn
+            onTurnChanged?.invoke(selected)
+        }
+
         list.addListSelectionListener {
             if (!it.valueIsAdjusting && !updatingModel) {
                 list.requestFocusInWindow()
@@ -71,10 +79,10 @@ class ChangedFilesPanel {
             }
         }
         list.addMouseListener(object : MouseAdapter() {
-            override fun mousePressed(e: MouseEvent) {
+            override fun mousePressed(e: java.awt.event.MouseEvent) {
                 list.requestFocusInWindow()
             }
-            override fun mouseClicked(e: MouseEvent) {
+            override fun mouseClicked(e: java.awt.event.MouseEvent) {
                 list.requestFocusInWindow()
                 if (e.clickCount == 2) {
                     list.selectedValue?.takeIf { it.status != ChangedFileStatus.DELETED }?.let { onOpenRequested?.invoke(it) }
@@ -96,56 +104,98 @@ class ChangedFilesPanel {
         }, BorderLayout.CENTER)
     }
 
-    fun setFiles(
+    fun setReviewFiles(
         files: List<ChangedFile>,
         selectedFilePath: String?,
-        commentCountsByPath: Map<String, FileCommentCounts>,
         seenFileKeys: Set<String>,
     ) {
-        this.files = files
+        this.reviewFiles = files
         this.selectedFilePath = selectedFilePath
-        this.commentCountsByPath = commentCountsByPath
         this.seenFileKeys = seenFileKeys
-        refreshModel(autoSelectFirst = true, notifySelection = false)
+        val item = turnCombo.selectedItem as? TurnComboItem
+        if (item == null || item.turn == null) {
+            refreshModel(autoSelectFirst = true, notifySelection = false)
+        }
+    }
+
+    fun refreshTurns(turnSnapshotService: TurnSnapshotService) {
+        if (!turnsEnabled) {
+            turnFilesById = emptyMap()
+            turnCombo.removeAllItems()
+            turnCombo.addItem(TurnComboItem("Review Changes", null))
+            turnCombo.selectedIndex = 0
+            turnCombo.isVisible = false
+            titleLabel.text = "Changed Files"
+            return
+        }
+        val previousId = (turnCombo.selectedItem as? TurnComboItem)?.turn?.id
+        turnFilesById = turnSnapshotService.getCompletedTurns().associate { it.id to turnSnapshotService.getTurnDiffs(it.id) }
+        turnCombo.removeAllItems()
+        turnCombo.addItem(TurnComboItem("Review Changes", null))
+        for (turn in turnSnapshotService.getCompletedTurns()) {
+            turnCombo.addItem(TurnComboItem(turnLabel(turn), turn))
+        }
+        val selectIndex = if (previousId != null) {
+            (0 until turnCombo.itemCount).indexOfFirst { i ->
+                turnCombo.getItemAt(i).turn?.id == previousId
+            }.coerceAtLeast(0)
+        } else 0
+        turnCombo.selectedIndex = selectIndex
+        turnCombo.isVisible = true
+    }
+
+    fun setTurnsEnabled(enabled: Boolean) {
+        if (turnsEnabled == enabled) return
+        turnsEnabled = enabled
+        if (!enabled) {
+            turnCombo.selectedIndex = 0
+            refreshModel(autoSelectFirst = true, notifySelection = false)
+        }
+    }
+
+    private fun turnLabel(turn: TurnSnapshot): String {
+        val agent = turn.agent ?: "unknown"
+        val started = try {
+            Instant.parse(turn.startedAt).atZone(java.time.ZoneId.systemDefault()).toLocalTime().format(FMT)
+        } catch (_: Exception) { "?" }
+        val duration = if (turn.endedAt != null) {
+            try {
+                val d = Duration.between(Instant.parse(turn.startedAt), Instant.parse(turn.endedAt))
+                "${d.seconds}s"
+            } catch (_: Exception) { "" }
+        } else ""
+        val count = turn.changedPaths.size
+        return "$started  $agent  $duration  $count files"
     }
 
     fun selectedFile(): ChangedFile? = list.selectedValue
+
+    fun selectedTurn(): TurnSnapshot? = (turnCombo.selectedItem as? TurnComboItem)?.turn
+
+    fun currentFiles(): List<ChangedFile> {
+        val turn = selectedTurn()
+        return turn?.let { turnFilesById[it.id].orEmpty() } ?: reviewFiles
+    }
 
     private fun createHeader(): JComponent = JPanel(BorderLayout()).apply {
         isOpaque = true
         background = component.background
         border = JBUI.Borders.empty(8, 12, 4, 12)
-
         add(titleLabel.apply {
             foreground = UIManager.getColor("Label.foreground")
             font = font.deriveFont(font.style or Font.BOLD)
         }, BorderLayout.WEST)
-
-        add(JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
-            isOpaque = false
-            add(filterCombo.apply {
-                toolTipText = "Filter by seen status"
-            }, BorderLayout.WEST)
-            add(sortCombo.apply {
-                toolTipText = "Sort by seen status"
-            }, BorderLayout.EAST)
+        add(turnCombo.apply {
+            toolTipText = "Select turn to view its changes"
         }, BorderLayout.EAST)
     }
 
     private fun refreshModel(autoSelectFirst: Boolean, notifySelection: Boolean) {
         val previousSelectionPath = list.selectedValue?.filePath
-        val previousSelectionIndex = list.selectedIndex
-        val visibleFiles = files
-            .filter { filterCombo.selectionSeenFilter().matches(it, seenFileKeys) }
-            .let { sortCombo.selectionSeenSort().applyTo(it, seenFileKeys) }
-            .keepSelectedFileStable(previousSelectionPath, previousSelectionIndex)
+        val turn = selectedTurn()
+        val visibleFiles = turn?.let { turnFilesById[it.id].orEmpty() } ?: reviewFiles
 
-        val unseenCount = files.count { it.seenKey() !in seenFileKeys }
-        titleLabel.text = if (files.isEmpty() || unseenCount == 0) {
-            "Changed Files"
-        } else {
-            "Changed Files ($unseenCount unseen)"
-        }
+        titleLabel.text = if (turn != null) "Turn Changed Files" else "Changed Files"
 
         val wasUpdatingModel = updatingModel
         updatingModel = true
@@ -153,9 +203,8 @@ class ChangedFilesPanel {
             model.removeAllElements()
             visibleFiles.forEach(model::addElement)
 
-            val selectedIndex = visibleFiles.indexOfFirst { it.filePath == selectedFilePath }
             list.selectedIndex = when {
-                selectedIndex >= 0 -> selectedIndex
+                previousSelectionPath != null -> visibleFiles.indexOfFirst { it.filePath == previousSelectionPath }.coerceAtLeast(0)
                 autoSelectFirst && model.size() > 0 -> 0
                 else -> -1
             }
@@ -170,64 +219,42 @@ class ChangedFilesPanel {
             }
         }
     }
-}
 
-private enum class SeenFilter(private val label: String) {
-    ALL("All"),
-    UNSEEN("Unseen"),
-    SEEN("Seen");
-
-    fun matches(file: ChangedFile, seenFileKeys: Set<String>): Boolean = when (this) {
-        ALL -> true
-        UNSEEN -> file.seenKey() !in seenFileKeys
-        SEEN -> file.seenKey() in seenFileKeys
+    private data class TurnComboItem(
+        val label: String,
+        val turn: TurnSnapshot?,
+    ) {
+        override fun toString(): String = label
     }
 
-    override fun toString(): String = label
-}
+    private class TurnComboRenderer : ListCellRenderer<TurnComboItem> {
+        private val delegate = DefaultListCellRenderer()
 
-private enum class SeenSort(private val label: String) {
-    DEFAULT("Default"),
-    UNSEEN_FIRST("Unseen First"),
-    SEEN_FIRST("Seen First");
-
-    fun applyTo(files: List<ChangedFile>, seenFileKeys: Set<String>): List<ChangedFile> = when (this) {
-        DEFAULT -> files
-        UNSEEN_FIRST -> files.sortedBy { it.seenKey() in seenFileKeys }
-        SEEN_FIRST -> files.sortedBy { it.seenKey() !in seenFileKeys }
+        override fun getListCellRendererComponent(
+            list: JList<out TurnComboItem>,
+            value: TurnComboItem?,
+            index: Int,
+            isSelected: Boolean,
+            cellHasFocus: Boolean,
+        ): Component {
+            val comp = delegate.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
+            if (comp is JLabel) {
+                comp.text = value?.label ?: ""
+            }
+            return comp
+        }
     }
 
-    override fun toString(): String = label
+    companion object {
+        private val FMT = DateTimeFormatter.ofPattern("HH:mm:ss")
+    }
 }
-
-private fun JComboBox<SeenFilter>.selectionSeenFilter(): SeenFilter = selectedItem as? SeenFilter ?: SeenFilter.ALL
-
-private fun JComboBox<SeenSort>.selectionSeenSort(): SeenSort = selectedItem as? SeenSort ?: SeenSort.DEFAULT
-
-private fun List<ChangedFile>.keepSelectedFileStable(selectedFilePath: String?, selectedIndex: Int): List<ChangedFile> {
-    if (selectedFilePath == null || selectedIndex < 0) return this
-    val currentIndex = indexOfFirst { it.filePath == selectedFilePath }
-    if (currentIndex < 0 || currentIndex == selectedIndex) return this
-
-    val reordered = toMutableList()
-    val selectedFile = reordered.removeAt(currentIndex)
-    reordered.add(selectedIndex.coerceIn(0, reordered.size), selectedFile)
-    return reordered
-}
-
-data class FileCommentCounts(
-    val open: Int = 0,
-    val resolved: Int = 0,
-)
 
 private class ChangedFileCellRenderer(
-    private val commentCountsProvider: (ChangedFile) -> FileCommentCounts,
-    private val seenProvider: (ChangedFile) -> Boolean,
+    private val unseenState: (ChangedFile) -> Boolean?,
 ) : ListCellRenderer<ChangedFile> {
     private val addedColor = JBColor(0x1A7F37, 0x3FB950)
     private val deletedColor = JBColor(0xCF222E, 0xF85149)
-    private val openCommentColor = JBColor(0xB07A00, 0xF2CC60)
-    private val resolvedCommentColor = JBColor(0x1A7F37, 0x7EE787)
     private val modifiedBadgeBg = JBColor(0xE9EEF8, 0x313A48)
     private val addedBadgeBg = JBColor(0xE7F6EC, 0x243B2D)
     private val deletedBadgeBg = JBColor(0xFBE9E7, 0x3A2525)
@@ -237,7 +264,6 @@ private class ChangedFileCellRenderer(
     private val title = JBLabel()
     private val titleBaseFont = title.font
     private val stats = JBLabel()
-    private val commentStats = JBLabel()
     private val subtitle = JBLabel()
     private val statusBadge = JBLabel().apply {
         border = JBUI.Borders.empty(2, 6)
@@ -265,10 +291,6 @@ private class ChangedFileCellRenderer(
             border = JBUI.Borders.emptyTop(4)
             alignmentX = 0.0f
         })
-        add(commentStats.apply {
-            border = JBUI.Borders.emptyTop(3)
-            alignmentX = 0.0f
-        })
     }
     private val panel = JPanel(BorderLayout()).apply {
         add(content, BorderLayout.CENTER)
@@ -290,52 +312,35 @@ private class ChangedFileCellRenderer(
     ): JComponent {
         if (value == null) return panel
 
-        val colors = if (isSelected) {
-            list.selectionBackground to list.selectionForeground
-        } else {
-            list.background to list.foreground
-        }
-        val (background, foreground) = colors
+        val bg = if (isSelected) list.selectionBackground else list.background
+        val fg = if (isSelected) list.selectionForeground else list.foreground
 
         val fileType = FileTypeManager.getInstance().getFileTypeByFileName(value.filePath)
-        val isSeen = seenProvider(value)
+        val unseen = unseenState(value)
         title.icon = fileType.icon
-        val fileName = value.filePath.substringAfterLast('/')
-        title.text = if (isSeen) fileName else "$fileName *"
-        title.font = titleBaseFont.deriveFont(if (isSeen) Font.PLAIN else Font.BOLD)
-        title.foreground = foreground
+        title.text = if (unseen == true) "* ${value.filePath.substringAfterLast('/')}" else value.filePath.substringAfterLast('/')
+        title.font = titleBaseFont.deriveFont(if (unseen == true) Font.BOLD else Font.PLAIN)
+        title.foreground = fg
         statusBadge.text = value.status.name
-        statusBadge.foreground = statusForeground(value, isSelected, foreground)
-        statusBadge.background = if (isSelected) background else statusBackground(value)
+        statusBadge.foreground = statusForeground(value, isSelected, fg)
+        statusBadge.background = if (isSelected) bg else statusBackground(value)
 
-        val lineStats = calculateLineStats(value)
+        val lineStats = estimateLineStats(value)
         stats.text = if (isSelected) {
             "+${lineStats.added}  -${lineStats.deleted}"
         } else {
             "<html><span style='color:${colorHex(addedColor)}'>+${lineStats.added}</span>&nbsp;&nbsp;<span style='color:${colorHex(deletedColor)}'>-${lineStats.deleted}</span></html>"
         }
-        stats.foreground = foreground
-
-        val commentCounts = commentCountsProvider(value)
-        commentStats.text = if (commentCounts.open == 0 && commentCounts.resolved == 0) {
-            ""
-        } else if (isSelected) {
-            "${commentCounts.open} open  ${commentCounts.resolved} resolved"
-        } else {
-            "<html><span style='color:${colorHex(openCommentColor)}'>${commentCounts.open} open</span>&nbsp;&nbsp;<span style='color:${colorHex(resolvedCommentColor)}'>${commentCounts.resolved} resolved</span></html>"
-        }
-        commentStats.foreground = foreground
-        commentStats.isVisible = commentStats.text.isNotBlank()
+        stats.foreground = fg
 
         subtitle.text = buildSubtitle(value)
         subtitle.isVisible = subtitle.text.isNotBlank()
 
-        val rowBackground = if (isSelected) selectedRowBg else background
-        panel.background = background
+        val rowBackground = if (isSelected) selectedRowBg else bg
+        panel.background = bg
         content.background = rowBackground
         title.background = rowBackground
         subtitle.background = rowBackground
-        commentStats.background = rowBackground
         titleRow.background = rowBackground
 
         panel.border = BorderFactory.createEmptyBorder(0, 0, 8, 0)
@@ -352,30 +357,36 @@ private class ChangedFileCellRenderer(
         return if (path.isBlank()) value.filePath else path
     }
 
-    private fun calculateLineStats(value: ChangedFile): LineStats {
+    // Keep list rendering cheap on the EDT. This badge is only a summary, so we
+    // estimate the changed middle range instead of running the full diff engine.
+    private fun estimateLineStats(value: ChangedFile): LineStats {
         val before = value.beforeContent?.text.orEmpty()
         val after = value.afterContent?.text.orEmpty()
         if (before.isEmpty() && after.isEmpty()) return LineStats(0, 0)
         if (before.isEmpty()) return LineStats(countLines(after), 0)
         if (after.isEmpty()) return LineStats(0, countLines(before))
 
-        val fragments = ComparisonManager.getInstance().compareLines(
-            before,
-            after,
-            ComparisonPolicy.DEFAULT,
-            DumbProgressIndicator.INSTANCE,
-        )
-        var added = 0
-        var deleted = 0
-        for (fragment in fragments) {
-            deleted += fragment.endLine1 - fragment.startLine1
-            added += fragment.endLine2 - fragment.startLine2
+        val beforeLines = before.lines()
+        val afterLines = after.lines()
+
+        var prefix = 0
+        while (prefix < beforeLines.size && prefix < afterLines.size && beforeLines[prefix] == afterLines[prefix]) {
+            prefix += 1
         }
+
+        var beforeSuffix = beforeLines.lastIndex
+        var afterSuffix = afterLines.lastIndex
+        while (beforeSuffix >= prefix && afterSuffix >= prefix && beforeLines[beforeSuffix] == afterLines[afterSuffix]) {
+            beforeSuffix -= 1
+            afterSuffix -= 1
+        }
+
+        val deleted = (beforeSuffix - prefix + 1).coerceAtLeast(0)
+        val added = (afterSuffix - prefix + 1).coerceAtLeast(0)
         return LineStats(added, deleted)
     }
 
     private fun countLines(text: String): Int = if (text.isEmpty()) 0 else text.lines().size
-
     private fun colorHex(color: Color): String = String.format("#%02x%02x%02x", color.red, color.green, color.blue)
 
     private fun statusBackground(value: ChangedFile): JBColor = when (value.status) {
