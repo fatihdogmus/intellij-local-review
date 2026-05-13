@@ -3,6 +3,7 @@ package dev.fatihdogmus.agenticreview.snapshot
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
+import dev.fatihdogmus.agenticreview.testutil.runGit
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -100,13 +101,4 @@ class TurnSnapshotServiceAdditionalTest {
         service.removeListener(listener)
     }
 
-    private fun runGit(root: Path, vararg args: String) {
-        val result = ProcessBuilder(listOf("git", *args))
-            .directory(root.toFile())
-            .redirectErrorStream(true)
-            .start()
-        val output = result.inputStream.bufferedReader().readText()
-        val exitCode = result.waitFor()
-        check(exitCode == 0) { "git ${args.joinToString(" ")} failed: $output" }
-    }
 }

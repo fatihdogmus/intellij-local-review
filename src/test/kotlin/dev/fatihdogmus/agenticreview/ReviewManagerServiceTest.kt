@@ -21,6 +21,10 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import dev.fatihdogmus.agenticreview.testutil.gitHead
+import dev.fatihdogmus.agenticreview.testutil.initGitRepo
+import dev.fatihdogmus.agenticreview.testutil.runGit
+import dev.fatihdogmus.agenticreview.testutil.write
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
@@ -486,11 +490,12 @@ class ReviewManagerServiceTest {
 
     @Test
     fun createCommitRangeReviewSingleCommitFallsBackToCommitReview() {
-        val repoRoot = initGitRepo()
+        val repoRoot = Path.of(project.basePath!!)
+        initGitRepo(repoRoot)
         write(repoRoot.resolve("src/Foo.kt"), "one\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "initial")
-        val commit = head(repoRoot)
+        val commit = gitHead(repoRoot)
         val manager = ReviewManagerService.getInstance(project)
 
         val review = manager.createCommitRangeReview(listOf(commit))
@@ -501,19 +506,20 @@ class ReviewManagerServiceTest {
 
     @Test
     fun createCommitRangeReviewMultipleCommitsCreatesRangeReview() {
-        val repoRoot = initGitRepo()
+        val repoRoot = Path.of(project.basePath!!)
+        initGitRepo(repoRoot)
         write(repoRoot.resolve("src/Foo.kt"), "one\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "first")
-        val first = head(repoRoot)
+        val first = gitHead(repoRoot)
         write(repoRoot.resolve("src/Foo.kt"), "two\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "second")
-        val second = head(repoRoot)
+        val second = gitHead(repoRoot)
         write(repoRoot.resolve("src/Foo.kt"), "three\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "third")
-        val third = head(repoRoot)
+        val third = gitHead(repoRoot)
         val manager = ReviewManagerService.getInstance(project)
 
         val review = manager.createCommitRangeReview(listOf(second, third))
@@ -525,7 +531,8 @@ class ReviewManagerServiceTest {
 
     @Test
     fun loadChangedFilesCoversUncommittedCommitAndRangeReviews() {
-        val repoRoot = initGitRepo()
+        val repoRoot = Path.of(project.basePath!!)
+        initGitRepo(repoRoot)
         val manager = ReviewManagerService.getInstance(project)
         manager.uncommittedChangesLoader = { listOf(sampleChangedFile("src/Uncommitted.kt")) }
         val uncommittedFiles = manager.loadChangedFiles(seededReview("load-uncommitted"))
@@ -533,11 +540,11 @@ class ReviewManagerServiceTest {
         write(repoRoot.resolve("src/Foo.kt"), "one\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "first")
-        val first = head(repoRoot)
+        val first = gitHead(repoRoot)
         write(repoRoot.resolve("src/Foo.kt"), "two\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "second")
-        val second = head(repoRoot)
+        val second = gitHead(repoRoot)
 
         val commitReview = seededCommitReview("load-commit").apply { repositoryRoot = repoRoot.toString(); target.commitHash = second }
         val rangeReview = Review(
@@ -767,33 +774,6 @@ class ReviewManagerServiceTest {
             filePath = path,
         ),
     )
-
-    private fun initGitRepo(): Path {
-        val root = Path.of(project.basePath!!)
-        runGit(root, "init")
-        runGit(root, "config", "user.email", "test@example.com")
-        runGit(root, "config", "user.name", "Test User")
-        runGit(root, "branch", "-M", "main")
-        return root
-    }
-
-    private fun write(path: Path, content: String) {
-        Files.createDirectories(path.parent)
-        Files.writeString(path, content)
-    }
-
-    private fun head(root: Path): String = runGit(root, "rev-parse", "HEAD").trim()
-
-    private fun runGit(root: Path, vararg args: String): String {
-        val process = ProcessBuilder(listOf("git", *args))
-            .directory(root.toFile())
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-        check(exitCode == 0) { "git ${args.joinToString(" ")} failed: $output" }
-        return output
-    }
 
     private fun sampleBranchReviewMetadata(): BranchReviewMetadata = BranchReviewMetadata(
         repositoryRoot = "/tmp/repo",

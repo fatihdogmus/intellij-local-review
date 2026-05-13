@@ -26,6 +26,10 @@ import dev.fatihdogmus.agenticreview.vcs.ReviewContent
 import com.intellij.vcs.log.VcsLogCommitSelection
 import com.intellij.vcs.log.VcsLogDataKeys
 import com.intellij.vcs.log.impl.HashImpl
+import dev.fatihdogmus.agenticreview.testutil.gitHead
+import dev.fatihdogmus.agenticreview.testutil.initGitRepo
+import dev.fatihdogmus.agenticreview.testutil.runGit
+import dev.fatihdogmus.agenticreview.testutil.write
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -122,6 +126,12 @@ class ReviewActionsIntegrationTest {
     }
 
     @Test
+    fun startReviewFromGitLogActionHasCorrectUpdateThread() {
+        val action = StartReviewFromGitLogAction()
+        assertThat(action.actionUpdateThread).isEqualTo(com.intellij.openapi.actionSystem.ActionUpdateThread.BGT)
+    }
+
+    @Test
     fun startReviewFromGitLogActionPerformedReturnsEarlyWithoutContext() {
         val action = StartReviewFromGitLogAction()
 
@@ -133,15 +143,16 @@ class ReviewActionsIntegrationTest {
 
     @Test
     fun startReviewFromGitLogActionPerformedCreatesCommitRangeReview() {
-        val repoRoot = initGitRepo()
+        val repoRoot = Path.of(project.basePath!!)
+        initGitRepo(repoRoot)
         write(repoRoot.resolve("src/Foo.kt"), "one\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "first")
-        val first = head(repoRoot)
+        val first = gitHead(repoRoot)
         write(repoRoot.resolve("src/Foo.kt"), "two\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "second")
-        val second = head(repoRoot)
+        val second = gitHead(repoRoot)
         val event = eventWithData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION, realCommitSelection(listOf(first, second), repoRoot))
         val manager = ReviewManagerService.getInstance(project)
         val before = manager.listReviews().size
@@ -244,29 +255,6 @@ class ReviewActionsIntegrationTest {
         val root = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(repoRoot) ?: error("root vf missing")
         val commits = hashes.map { CommitId(HashImpl.build(it), root) }
         return TestCommitSelection(commits)
-    }
-
-    private fun initGitRepo(): Path {
-        val root = Path.of(project.basePath!!)
-        runGit(root, "init")
-        runGit(root, "config", "user.email", "test@example.com")
-        runGit(root, "config", "user.name", "Test User")
-        runGit(root, "branch", "-M", "main")
-        return root
-    }
-
-    private fun write(path: Path, content: String) {
-        Files.createDirectories(path.parent)
-        Files.writeString(path, content)
-    }
-
-    private fun head(root: Path): String = runGit(root, "rev-parse", "HEAD").trim()
-
-    private fun runGit(root: Path, vararg args: String): String {
-        val process = ProcessBuilder(listOf("git", *args)).directory(root.toFile()).redirectErrorStream(true).start()
-        val output = process.inputStream.bufferedReader().readText()
-        check(process.waitFor() == 0) { "git ${args.joinToString(" ")} failed: $output" }
-        return output
     }
 
     private fun waitFor(condition: () -> Boolean) {

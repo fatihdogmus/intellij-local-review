@@ -13,12 +13,11 @@ import dev.fatihdogmus.agenticreview.model.ReviewTarget
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
+import dev.fatihdogmus.agenticreview.testutil.reviewSelector
+import dev.fatihdogmus.agenticreview.testutil.turnCombo
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.awt.Component
-import java.awt.Container
-import java.nio.file.Files
 import java.nio.file.Path
 import javax.swing.JComboBox
 import javax.swing.JLabel
@@ -126,8 +125,9 @@ class ReviewToolWindowPanelIntegrationTest {
         ApplicationManager.getApplication().invokeAndWait {
             val panel = ReviewToolWindowPanel(project)
             try {
-                val reviewSelector = reviewSelector(panel)
-                val label = reviewSelector.renderer.getListCellRendererComponent(JList(), review, 0, false, false) as JLabel
+                @Suppress("UNCHECKED_CAST")
+                val selector = reviewSelector(panel) as JComboBox<Review>
+                val label = selector.renderer.getListCellRendererComponent(JList<Review>(), review, 0, false, false) as JLabel
 
                 assertThat(label.text).isEqualTo("Renderer review · 1 Open 1 Resolved")
             } finally {
@@ -148,44 +148,5 @@ class ReviewToolWindowPanelIntegrationTest {
         }
     }
 
-    private fun turnCombo(panel: ReviewToolWindowPanel): JComboBox<*> =
-        findComponents(panel)
-            .filterIsInstance<JComboBox<*>>()
-            .single { combo -> combo.itemCount > 0 && combo.getItemAt(0).toString() == "Review Changes" }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun reviewSelector(panel: ReviewToolWindowPanel): JComboBox<Review> =
-        findComponents(panel)
-            .filterIsInstance<JComboBox<*>>()
-            .first { combo -> combo.itemCount > 0 && combo.getItemAt(0).toString() != "Review Changes" } as JComboBox<Review>
-
-    private fun findComponents(root: Component): List<Component> = buildList {
-        add(root)
-        if (root is Container) {
-            root.components.forEach { child -> addAll(findComponents(child)) }
-        }
-    }
-
-    private fun initGitRepoWithCommit(): String {
-        val root = Path.of(project.basePath!!)
-        runGit(root, "init")
-        runGit(root, "config", "user.email", "test@example.com")
-        runGit(root, "config", "user.name", "Test User")
-        Files.createDirectories(root.resolve("src"))
-        Files.writeString(root.resolve("src/Foo.kt"), "class Foo\n")
-        runGit(root, "add", ".")
-        runGit(root, "commit", "-m", "initial")
-        return runGit(root, "rev-parse", "HEAD").trim()
-    }
-
-    private fun runGit(root: Path, vararg args: String): String {
-        val process = ProcessBuilder(listOf("git", *args))
-            .directory(root.toFile())
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-        check(exitCode == 0) { "git ${args.joinToString(" ")} failed: $output" }
-        return output
-    }
+    private fun initGitRepoWithCommit(): String = dev.fatihdogmus.agenticreview.testutil.initGitRepoWithCommit(Path.of(project.basePath!!))
 }

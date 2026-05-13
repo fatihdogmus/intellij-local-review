@@ -3,6 +3,14 @@ package dev.fatihdogmus.agenticreview.ui
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
+import dev.fatihdogmus.agenticreview.testutil.findLabel
+import dev.fatihdogmus.agenticreview.testutil.findComponents
+import dev.fatihdogmus.agenticreview.testutil.initGitRepo
+import dev.fatihdogmus.agenticreview.testutil.labels
+import dev.fatihdogmus.agenticreview.testutil.reviewList
+import dev.fatihdogmus.agenticreview.testutil.titleLabel
+import dev.fatihdogmus.agenticreview.testutil.turnCombo
+import dev.fatihdogmus.agenticreview.testutil.runGit
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
 import dev.fatihdogmus.agenticreview.vcs.ReviewContent
@@ -10,14 +18,10 @@ import dev.fatihdogmus.agenticreview.vcs.seenKey
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.awt.Component
-import java.awt.Container
 import java.nio.file.Files
 import java.nio.file.Path
-import javax.swing.JComboBox
 import javax.swing.JComponent
 import javax.swing.JLabel
-import javax.swing.JList
 
 @TestApplication
 class ChangedFilesPanelIntegrationTest {
@@ -46,7 +50,7 @@ class ChangedFilesPanelIntegrationTest {
         val seen = sampleChangedFile("src/Bar.kt")
         panel.setReviewFiles(listOf(unseen, seen), selectedFilePath = null, seenFileKeys = setOf(seen.seenKey()))
 
-        val list = panelList(panel)
+        val list = reviewList(panel)
         val renderer = list.cellRenderer
 
         val unseenComponent = renderer.getListCellRendererComponent(list, unseen, 0, false, false) as JComponent
@@ -63,7 +67,7 @@ class ChangedFilesPanelIntegrationTest {
     @Test
     fun rendererShowsRenameSubtitleStatusAndLineStats() {
         val panel = ChangedFilesPanel()
-        val list = panelList(panel)
+        val list = reviewList(panel)
         val renamed = ChangedFile(
             filePath = "src/new/Foo.kt",
             status = ChangedFileStatus.RENAMED,
@@ -131,53 +135,10 @@ class ChangedFilesPanelIntegrationTest {
         assertThat(titleLabel(panel).text).isEqualTo("Turn Changed Files")
     }
 
-    @Suppress("UNCHECKED_CAST")
-    private fun panelList(panel: ChangedFilesPanel): JList<ChangedFile> =
-        findComponents(panel.component).filterIsInstance<JList<*>>().single() as JList<ChangedFile>
-
-    private fun turnCombo(panel: ChangedFilesPanel): JComboBox<*> =
-        findComponents(panel.component)
-            .filterIsInstance<JComboBox<*>>()
-            .single { combo -> combo.itemCount > 0 && combo.getItemAt(0).toString() == "Review Changes" }
-
-    private fun titleLabel(panel: ChangedFilesPanel): JLabel =
-        findComponents(panel.component)
-            .filterIsInstance<JLabel>()
-            .first { it.text == "Changed Files" || it.text == "Turn Changed Files" }
-
-    private fun findLabel(component: Component, text: String): JLabel? {
-        if (component is JLabel && component.text == text) return component
-        if (component is JComponent) {
-            component.components.forEach { child ->
-                findLabel(child, text)?.let { return it }
-            }
-        }
-        return null
-    }
-
     private fun sampleChangedFile(path: String): ChangedFile = ChangedFile(
         filePath = path,
         status = ChangedFileStatus.MODIFIED,
         beforeContent = ReviewContent("before\n", "before", path),
         afterContent = ReviewContent("after\n", "after", path),
     )
-
-    private fun runGit(root: Path, vararg args: String) {
-        val process = ProcessBuilder(listOf("git", *args))
-            .directory(root.toFile())
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-        check(exitCode == 0) { "git ${args.joinToString(" ")} failed: $output" }
-    }
-
-    private fun labels(component: Component): List<JLabel> = findComponents(component).filterIsInstance<JLabel>()
-
-    private fun findComponents(root: Component): List<Component> = buildList {
-        add(root)
-        if (root is Container) {
-            root.components.forEach { child -> addAll(findComponents(child)) }
-        }
-    }
 }

@@ -1,12 +1,11 @@
 package dev.fatihdogmus.agenticreview.vcs
 
-import com.intellij.openapi.application.runWriteAction
-import com.intellij.openapi.vcs.ProjectLevelVcsManager
-import com.intellij.openapi.vcs.VcsDirectoryMapping
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import com.intellij.dvcs.repo.VcsRepositoryManager
-import git4idea.repo.GitRepositoryManager
+import dev.fatihdogmus.agenticreview.testutil.configureGitMapping
+import dev.fatihdogmus.agenticreview.testutil.gitHead
+import dev.fatihdogmus.agenticreview.testutil.runGit
+import dev.fatihdogmus.agenticreview.testutil.write
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
@@ -33,15 +32,15 @@ class CommitChangesProviderAdditionalTest {
         write(repoRoot.resolve("src/Foo.kt"), "one\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "initial")
-        val initial = head()
+        val initial = gitHead(repoRoot)
 
         runGit(repoRoot, "checkout", "-b", "feature/test")
         write(repoRoot.resolve("src/Foo.kt"), "two\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "feature work")
-        val featureHead = head()
+        val featureHead = gitHead(repoRoot)
 
-        configureGitMapping()
+        configureGitMapping(project, repoRoot)
 
         val provider = CommitChangesProvider(project)
         val metadata = provider.getCurrentBranchReviewMetadataOrNull()
@@ -62,7 +61,7 @@ class CommitChangesProviderAdditionalTest {
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "initial")
 
-        configureGitMapping()
+        configureGitMapping(project, repoRoot)
 
         val provider = CommitChangesProvider(project)
         assertThat(provider.canCreateCurrentBranchReview()).isFalse()
@@ -77,7 +76,7 @@ class CommitChangesProviderAdditionalTest {
         runGit(repoRoot, "branch", "-M", "trunk")
         runGit(repoRoot, "checkout", "-b", "feature/test")
 
-        configureGitMapping()
+        configureGitMapping(project, repoRoot)
 
         val provider = CommitChangesProvider(project)
         assertThat(provider.canCreateCurrentBranchReview()).isFalse()
@@ -89,7 +88,7 @@ class CommitChangesProviderAdditionalTest {
         write(repoRoot.resolve("src/Foo.kt"), "one\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "initial commit")
-        val initial = head()
+        val initial = gitHead(repoRoot)
 
         val metadata = CommitChangesProvider(project).getCombinedCommitMetadata(listOf(initial, initial))
 
@@ -111,7 +110,7 @@ class CommitChangesProviderAdditionalTest {
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "initial")
 
-        val files = CommitChangesProvider(project).getChangedFiles(head())
+        val files = CommitChangesProvider(project).getChangedFiles(gitHead(repoRoot))
 
         val file = files.single()
         assertThat(file.filePath).isEqualTo("src/Foo.kt")
@@ -126,13 +125,13 @@ class CommitChangesProviderAdditionalTest {
         write(repoRoot.resolve("src/Copy.kt"), "copy\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "initial")
-        val base = head()
+        val base = gitHead(repoRoot)
 
         Files.delete(repoRoot.resolve("src/Foo.kt"))
         write(repoRoot.resolve("src/CopyClone.kt"), "copy\n")
         runGit(repoRoot, "add", "-A")
         runGit(repoRoot, "commit", "-m", "delete and copy")
-        val head = this.head()
+        val head = gitHead(repoRoot)
 
         val files = CommitChangesProvider(project).getChangedFilesForRange(base, head)
         val deleted = files.first { it.filePath == "src/Foo.kt" }
@@ -147,31 +146,5 @@ class CommitChangesProviderAdditionalTest {
         assertThat(copied.afterContent?.text).isEqualTo("copy\n")
     }
 
-    private fun configureGitMapping() {
-        runWriteAction {
-            ProjectLevelVcsManager.getInstance(project).setDirectoryMappings(
-                listOf(VcsDirectoryMapping(repoRoot.toString(), "Git")),
-            )
-        }
-        project.getService(VcsRepositoryManager::class.java).waitForAsyncTaskCompletion()
-        GitRepositoryManager.getInstance(project).updateAllRepositories()
-    }
 
-    private fun write(path: Path, content: String) {
-        Files.createDirectories(path.parent)
-        Files.writeString(path, content)
-    }
-
-    private fun head(): String = runGit(repoRoot, "rev-parse", "HEAD").trim()
-
-    private fun runGit(root: Path, vararg args: String): String {
-        val process = ProcessBuilder(listOf("git", *args))
-            .directory(root.toFile())
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-        check(exitCode == 0) { "git ${args.joinToString(" ")} failed: $output" }
-        return output
-    }
 }

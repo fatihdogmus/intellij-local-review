@@ -2,10 +2,13 @@ package dev.fatihdogmus.agenticreview.vcs
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
+import dev.fatihdogmus.agenticreview.testutil.commitWithTimestamp
+import dev.fatihdogmus.agenticreview.testutil.gitHead
+import dev.fatihdogmus.agenticreview.testutil.runGit
+import dev.fatihdogmus.agenticreview.testutil.write
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.nio.file.Files
 import java.nio.file.Path
 
 @TestApplication
@@ -27,12 +30,12 @@ class CommitChangesProviderIntegrationTest {
         write(repoRoot.resolve("src/Foo.kt"), "one\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "initial commit")
-        val first = head()
+        val first = gitHead(repoRoot)
 
         write(repoRoot.resolve("src/Foo.kt"), "one\ntwo\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "update foo")
-        val second = head()
+        val second = gitHead(repoRoot)
 
         val metadata = CommitChangesProvider(project).getCommitMetadata(second.take(7))
 
@@ -56,7 +59,7 @@ class CommitChangesProviderIntegrationTest {
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "complex change")
 
-        val files = CommitChangesProvider(project).getChangedFiles(head())
+        val files = CommitChangesProvider(project).getChangedFiles(gitHead(repoRoot))
 
         assertThat(files).hasSize(3)
         val modified = files.first { it.filePath == "src/Foo.kt" }
@@ -81,18 +84,18 @@ class CommitChangesProviderIntegrationTest {
     fun combinedCommitMetadataSortsByTimestampAndUsesOldestParent() {
         write(repoRoot.resolve("src/Foo.kt"), "one\n")
         runGit(repoRoot, "add", ".")
-        commitWithTimestamp("initial", "2026-05-12T10:00:00+0000")
-        val first = head()
+        commitWithTimestamp(repoRoot, "initial", "2026-05-12T10:00:00+0000")
+        val first = gitHead(repoRoot)
 
         write(repoRoot.resolve("src/Foo.kt"), "two\n")
         runGit(repoRoot, "add", ".")
-        commitWithTimestamp("second", "2026-05-12T10:10:00+0000")
-        val second = head()
+        commitWithTimestamp(repoRoot, "second", "2026-05-12T10:10:00+0000")
+        val second = gitHead(repoRoot)
 
         write(repoRoot.resolve("src/Foo.kt"), "three\n")
         runGit(repoRoot, "add", ".")
-        commitWithTimestamp("third", "2026-05-12T10:20:00+0000")
-        val third = head()
+        commitWithTimestamp(repoRoot, "third", "2026-05-12T10:20:00+0000")
+        val third = gitHead(repoRoot)
 
         val metadata = CommitChangesProvider(project).getCombinedCommitMetadata(listOf(third, second))
 
@@ -108,7 +111,7 @@ class CommitChangesProviderIntegrationTest {
         write(repoRoot.resolve("src/Bar.kt"), "bar\n")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "initial")
-        val base = head()
+        val base = gitHead(repoRoot)
 
         write(repoRoot.resolve("src/Foo.kt"), "two\n")
         runGit(repoRoot, "add", ".")
@@ -117,35 +120,12 @@ class CommitChangesProviderIntegrationTest {
         runGit(repoRoot, "mv", "src/Bar.kt", "src/Baz.kt")
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "rename bar")
-        val head = head()
+        val headHash = gitHead(repoRoot)
 
-        val files = CommitChangesProvider(project).getChangedFilesForRange(base, head)
+        val files = CommitChangesProvider(project).getChangedFilesForRange(base, headHash)
 
         assertThat(files.map { it.filePath }).containsExactlyInAnyOrder("src/Baz.kt", "src/Foo.kt")
         assertThat(files.first { it.filePath == "src/Baz.kt" }.status).isEqualTo(ChangedFileStatus.RENAMED)
         assertThat(files.first { it.filePath == "src/Foo.kt" }.afterContent?.text).isEqualTo("two\n")
-    }
-
-    private fun write(path: Path, content: String) {
-        Files.createDirectories(path.parent)
-        Files.writeString(path, content)
-    }
-
-    private fun commitWithTimestamp(message: String, timestamp: String) {
-        runGit(repoRoot, "commit", "-m", message, env = mapOf("GIT_AUTHOR_DATE" to timestamp, "GIT_COMMITTER_DATE" to timestamp))
-    }
-
-    private fun head(): String = runGit(repoRoot, "rev-parse", "HEAD").trim()
-
-    private fun runGit(root: Path, vararg args: String, env: Map<String, String> = emptyMap()): String {
-        val process = ProcessBuilder(listOf("git", *args))
-            .directory(root.toFile())
-            .redirectErrorStream(true)
-            .apply { environment().putAll(env) }
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-        check(exitCode == 0) { "git ${args.joinToString(" ")} failed: $output" }
-        return output
     }
 }
