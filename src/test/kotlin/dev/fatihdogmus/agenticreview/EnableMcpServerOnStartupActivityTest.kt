@@ -50,4 +50,19 @@ class EnableMcpServerOnStartupActivityTest {
     fun activityIsProjectActivity() {
         assertThat(EnableMcpServerOnStartupActivity()).isInstanceOf(com.intellij.openapi.startup.ProjectActivity::class.java)
     }
+
+    @Test
+    fun executeStartsServiceWhenPropertyIsTrue() = runBlocking {
+        val previous = System.getProperty(EnableMcpServerOnStartupActivity.ENABLE_MCP_SERVER_BY_DEFAULT_PROPERTY)
+        try {
+            System.setProperty(EnableMcpServerOnStartupActivity.ENABLE_MCP_SERVER_BY_DEFAULT_PROPERTY, "true")
+            EnableMcpServerOnStartupActivity().execute(project)
+        } finally {
+            if (previous != null) {
+                System.setProperty(EnableMcpServerOnStartupActivity.ENABLE_MCP_SERVER_BY_DEFAULT_PROPERTY, previous)
+            } else {
+                System.clearProperty(EnableMcpServerOnStartupActivity.ENABLE_MCP_SERVER_BY_DEFAULT_PROPERTY)
+            }
+        }
+    }
 }

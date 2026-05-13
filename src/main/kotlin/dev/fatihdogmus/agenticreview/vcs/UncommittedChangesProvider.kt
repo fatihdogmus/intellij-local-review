@@ -35,7 +35,7 @@ class UncommittedChangesProvider(private val project: Project) {
         return (tracked + unversioned).sortedBy { it.filePath }
     }
 
-    private fun Change.toChangedFile(repositoryRoot: String): ChangedFile? {
+    internal fun Change.toChangedFile(repositoryRoot: String): ChangedFile? {
         val beforePath = beforeRevision?.file?.path?.toRelativePath(repositoryRoot)
         val afterPath = afterRevision?.file?.path?.toRelativePath(repositoryRoot)
         val resolvedPath = afterPath ?: beforePath ?: return null
@@ -49,7 +49,7 @@ class UncommittedChangesProvider(private val project: Project) {
         )
     }
 
-    private fun com.intellij.openapi.vcs.changes.ContentRevision.toReviewContent(relativePath: String?): ReviewContent? {
+    internal fun com.intellij.openapi.vcs.changes.ContentRevision.toReviewContent(relativePath: String?): ReviewContent? {
         val path = relativePath ?: file.path.substringAfterLast('/').substringAfterLast('\\')
         val content = try {
             content
@@ -59,11 +59,11 @@ class UncommittedChangesProvider(private val project: Project) {
         return ReviewContent(content, revisionNumber.asString(), path)
     }
 
-    private fun String.toRelativePath(repositoryRoot: String): String = runCatching {
+    internal fun String.toRelativePath(repositoryRoot: String): String = runCatching {
         Path.of(repositoryRoot).relativize(Path.of(this)).toString().replace('\\', '/')
     }.getOrDefault(replace('\\', '/'))
 
-    private fun mapStatus(type: Change.Type, beforePath: String?, afterPath: String?): ChangedFileStatus = when (type) {
+    internal fun mapStatus(type: Change.Type, beforePath: String?, afterPath: String?): ChangedFileStatus = when (type) {
         Change.Type.NEW -> ChangedFileStatus.ADDED
         Change.Type.MODIFICATION -> if (beforePath != null && afterPath != null && beforePath != afterPath) ChangedFileStatus.RENAMED else ChangedFileStatus.MODIFIED
         Change.Type.DELETED -> ChangedFileStatus.DELETED

@@ -1,5 +1,35 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": {
+      "git checkout": "ask",
+      "git checkout *": "ask",
+      "git commit": "ask",
+      "git commit *": "ask",
+      "git push": "ask",
+      "git push *": "ask",
+      "git reset *": "ask",
+      "git clean *": "ask",
+      "git rebase *": "ask",
+      "git stash drop *": "ask",
+      "git stash clear *": "ask",
+      "git branch -D *": "ask",
+      "rtk git checkout": "ask",
+      "rtk git checkout *": "ask",
+      "rtk git commit": "ask",
+      "rtk git commit *": "ask",
+      "rtk git push": "ask",
+      "rtk git push *": "ask",
+      "rtk git reset *": "ask",
+      "rtk git clean *": "ask",
+      "rtk git rebase *": "ask",
+      "rtk git stash drop *": "ask",
+      "rtk git stash clear *": "ask",
+      "rtk git branch -D *": "ask",
+      "rm -rf *": "ask",
+      "rm -r *": "ask"
+    }
+  },
   "mcp": {
     "agentic-review": {
       "type": "remote",
