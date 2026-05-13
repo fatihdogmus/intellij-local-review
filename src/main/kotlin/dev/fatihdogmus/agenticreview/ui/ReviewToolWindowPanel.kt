@@ -1,5 +1,6 @@
 package dev.fatihdogmus.agenticreview.ui
 
+import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.requests.MessageDiffRequest
 import com.intellij.icons.AllIcons
 import com.intellij.ide.DataManager
@@ -34,6 +35,7 @@ import dev.fatihdogmus.agenticreview.model.ReviewTargetType
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshot
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
+import dev.fatihdogmus.agenticreview.vcs.seenKey
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -76,6 +78,9 @@ class ReviewToolWindowPanel(
     private val changedFilesByReviewId = mutableMapOf<String, List<ChangedFile>>()
     private val changedFilesLoadSequence = AtomicInteger()
     private val turnSnapshotService = TurnSnapshotService.getInstance(project)
+    private val diffRequestCache = object : LinkedHashMap<String, DiffRequest>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, DiffRequest>): Boolean = size > 30
+    }
 
     init {
         manager.addListener(stateListener)
@@ -162,7 +167,12 @@ class ReviewToolWindowPanel(
         } else if (changedFile == null) {
             diffPanel.showDiff(MessageDiffRequest("Select changed file to review."))
         } else {
-            diffPanel.showDiff(diffRequestBuilder.buildForFile(reviewId, changedFile))
+            val repositoryRoot = review?.repositoryRoot ?: project.basePath ?: ""
+            val cacheKey = "$reviewId:${changedFile.seenKey()}"
+            val request = diffRequestCache.getOrPut(cacheKey) {
+                diffRequestBuilder.buildForFile(reviewId, changedFile, repositoryRoot)
+            }
+            diffPanel.showDiff(request)
             if (manager.markFileSeen(reviewId, changedFile)) {
                 changedFilesPanel.setReviewFiles(
                     changedFilesByReviewId[reviewId].orEmpty(),
@@ -187,7 +197,12 @@ class ReviewToolWindowPanel(
         }
         val matchedDiff = diffs.firstOrNull { it.filePath == changedFile.filePath }
         if (matchedDiff != null) {
-            diffPanel.showDiff(diffRequestBuilder.buildForFile(turn.id, matchedDiff))
+            val repositoryRoot = manager.getCurrentReview()?.repositoryRoot ?: project.basePath ?: ""
+            val cacheKey = "${turn.id}:${matchedDiff.seenKey()}"
+            val request = diffRequestCache.getOrPut(cacheKey) {
+                diffRequestBuilder.buildForFile(turn.id, matchedDiff, repositoryRoot)
+            }
+            diffPanel.showDiff(request)
         }
     }
 

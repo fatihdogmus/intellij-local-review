@@ -86,10 +86,8 @@ class ReviewDiffExtension : DiffExtension() {
         val gutterHighlighter = commentEditor.markupModel.addRangeHighlighter(
             null, 0, commentEditor.document.textLength,
             HighlighterLayer.LAST,
-            HighlighterTargetArea.LINES_IN_RANGE,
+            HighlighterTargetArea.EXACT_RANGE,
         ).apply {
-            isGreedyToLeft = true
-            isGreedyToRight = true
             lineMarkerRenderer = renderer
         }
 
