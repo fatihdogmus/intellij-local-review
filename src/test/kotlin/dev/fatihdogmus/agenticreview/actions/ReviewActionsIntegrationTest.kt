@@ -1,4 +1,4 @@
-package dev.fatihdogmus.agenticreview
+package dev.fatihdogmus.agenticreview.actions
 
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
@@ -13,10 +13,6 @@ import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.vcs.log.CommitId
 import dev.fatihdogmus.agenticreview.ReviewFileNavigator
 import dev.fatihdogmus.agenticreview.ReviewManagerService
-import dev.fatihdogmus.agenticreview.actions.AddReviewCommentAction
-import dev.fatihdogmus.agenticreview.actions.OpenReviewedFileAction
-import dev.fatihdogmus.agenticreview.actions.OpenReviewDialogAction
-import dev.fatihdogmus.agenticreview.actions.StartReviewFromGitLogAction
 import dev.fatihdogmus.agenticreview.diff.REVIEW_DIFF_EDITOR_KEY
 import dev.fatihdogmus.agenticreview.diff.ReviewDiffRequestData
 import dev.fatihdogmus.agenticreview.model.Review

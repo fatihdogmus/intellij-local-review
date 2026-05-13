@@ -1,4 +1,4 @@
-package dev.fatihdogmus.agenticreview
+package dev.fatihdogmus.agenticreview.persistence
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
@@ -11,7 +11,6 @@ import dev.fatihdogmus.agenticreview.model.ReviewComment
 import dev.fatihdogmus.agenticreview.model.ReviewStatus
 import dev.fatihdogmus.agenticreview.model.ReviewTarget
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
-import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 

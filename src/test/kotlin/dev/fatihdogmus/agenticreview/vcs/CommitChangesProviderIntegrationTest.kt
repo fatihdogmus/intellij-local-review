@@ -1,9 +1,7 @@
-package dev.fatihdogmus.agenticreview
+package dev.fatihdogmus.agenticreview.vcs
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
-import dev.fatihdogmus.agenticreview.vcs.CommitChangesProvider
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

@@ -1,4 +1,4 @@
-package dev.fatihdogmus.agenticreview
+package dev.fatihdogmus.agenticreview.vcs
 
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
@@ -6,9 +6,6 @@ import com.intellij.openapi.vcs.VcsDirectoryMapping
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.dvcs.repo.VcsRepositoryManager
-import dev.fatihdogmus.agenticreview.vcs.ChangedFile
-import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
-import dev.fatihdogmus.agenticreview.vcs.CommitChangesProvider
 import git4idea.repo.GitRepositoryManager
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy

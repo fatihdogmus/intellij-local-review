@@ -1,4 +1,4 @@
-package dev.fatihdogmus.agenticreview
+package dev.fatihdogmus.agenticreview.ui
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Disposer
@@ -13,7 +13,6 @@ import dev.fatihdogmus.agenticreview.model.ReviewTarget
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
-import dev.fatihdogmus.agenticreview.ui.ReviewToolWindowPanel
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

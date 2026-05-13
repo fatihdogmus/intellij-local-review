@@ -1,9 +1,5 @@
-package dev.fatihdogmus.agenticreview
+package dev.fatihdogmus.agenticreview.vcs
 
-import dev.fatihdogmus.agenticreview.vcs.ChangedFile
-import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
-import dev.fatihdogmus.agenticreview.vcs.ReviewContent
-import dev.fatihdogmus.agenticreview.vcs.seenKey
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 

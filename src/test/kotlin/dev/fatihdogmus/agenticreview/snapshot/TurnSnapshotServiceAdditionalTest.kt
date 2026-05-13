@@ -1,10 +1,8 @@
-package dev.fatihdogmus.agenticreview
+package dev.fatihdogmus.agenticreview.snapshot
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
-import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
-import dev.fatihdogmus.agenticreview.snapshot.TurnToolCall
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

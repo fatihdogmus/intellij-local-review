@@ -1,7 +1,6 @@
-package dev.fatihdogmus.agenticreview
+package dev.fatihdogmus.agenticreview.export
 
 import dev.fatihdogmus.agenticreview.diff.DiffContextExtractor
-import dev.fatihdogmus.agenticreview.export.AgentPromptBuilder
 import dev.fatihdogmus.agenticreview.model.CommentAnchor
 import dev.fatihdogmus.agenticreview.model.CommentStatus
 import dev.fatihdogmus.agenticreview.model.DiffSide

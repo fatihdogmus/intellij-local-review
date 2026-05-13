@@ -1,4 +1,4 @@
-package dev.fatihdogmus.agenticreview
+package dev.fatihdogmus.agenticreview.editor
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorPolicy
@@ -6,9 +6,6 @@ import com.intellij.openapi.fileEditor.FileEditorState
 import com.intellij.openapi.util.Disposer
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.fatihdogmus.agenticreview.editor.ReviewPageEditorProvider
-import dev.fatihdogmus.agenticreview.editor.ReviewPageFileEditor
-import dev.fatihdogmus.agenticreview.editor.ReviewPageVirtualFile
 import org.assertj.core.api.Assertions.assertThat
 import org.jdom.Element
 import org.junit.jupiter.api.Test

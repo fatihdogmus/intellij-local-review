@@ -1,4 +1,4 @@
-package dev.fatihdogmus.agenticreview
+package dev.fatihdogmus.agenticreview.diff
 
 import com.intellij.diff.contents.DocumentContent
 import com.intellij.diff.requests.ContentDiffRequest
@@ -6,8 +6,6 @@ import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.fatihdogmus.agenticreview.diff.DiffRequestBuilder
-import dev.fatihdogmus.agenticreview.diff.REVIEW_DIFF_REQUEST_DATA_KEY
 import dev.fatihdogmus.agenticreview.model.DiffSide
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
