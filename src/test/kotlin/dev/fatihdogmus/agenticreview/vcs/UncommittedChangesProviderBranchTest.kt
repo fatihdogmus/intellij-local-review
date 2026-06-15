@@ -1,8 +1,8 @@
 package dev.fatihdogmus.agenticreview.vcs
 
-import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.LocalFilePath
 import com.intellij.openapi.vcs.VcsException
+import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.SimpleContentRevision
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture

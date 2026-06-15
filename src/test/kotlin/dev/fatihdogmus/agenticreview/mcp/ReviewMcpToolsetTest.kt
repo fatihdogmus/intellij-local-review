@@ -3,20 +3,10 @@ package dev.fatihdogmus.agenticreview.mcp
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.ReviewManagerService
-import dev.fatihdogmus.agenticreview.mcp.CommentListResult
-import dev.fatihdogmus.agenticreview.mcp.ExportResult
-import dev.fatihdogmus.agenticreview.mcp.MutationResult
-import dev.fatihdogmus.agenticreview.mcp.ReviewMcpToolset
-import dev.fatihdogmus.agenticreview.mcp.ReviewResult
+import dev.fatihdogmus.agenticreview.model.*
+import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotListResult
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotResult
-import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
-import dev.fatihdogmus.agenticreview.model.CommentStatus
-import dev.fatihdogmus.agenticreview.model.DiffSide
-import dev.fatihdogmus.agenticreview.model.Review
-import dev.fatihdogmus.agenticreview.model.ReviewTarget
-import dev.fatihdogmus.agenticreview.model.ReviewTargetType
-import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
 import dev.fatihdogmus.agenticreview.vcs.ReviewContent
@@ -146,7 +136,11 @@ class ReviewMcpToolsetTest {
         manager.markCommentResolved(resolved)
 
         val result = json.decodeFromString<ReviewResult>(
-            ReviewMcpToolset().reviewGetReview(selector = "uncommitted", includeComments = true, includeResolved = false),
+            ReviewMcpToolset().reviewGetReview(
+                selector = "uncommitted",
+                includeComments = true,
+                includeResolved = false
+            ),
         )
 
         assertThat(result.review.target.type).isEqualTo(ReviewTargetType.UNCOMMITTED)
@@ -310,7 +304,10 @@ class ReviewMcpToolsetTest {
         assertThat(listResult.turns.single().changedFileCount).isEqualTo(2)
     }
 
-    private fun seededReview(suffix: String, target: ReviewTarget = ReviewTarget(type = ReviewTargetType.UNCOMMITTED)): Review = Review(
+    private fun seededReview(
+        suffix: String,
+        target: ReviewTarget = ReviewTarget(type = ReviewTargetType.UNCOMMITTED)
+    ): Review = Review(
         id = "review-mcp-$suffix",
         title = "MCP review",
         target = target,

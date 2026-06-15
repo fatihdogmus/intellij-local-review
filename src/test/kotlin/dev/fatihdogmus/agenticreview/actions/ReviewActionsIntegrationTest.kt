@@ -2,34 +2,34 @@ package dev.fatihdogmus.agenticreview.actions
 
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.actionSystem.Presentation
-import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.vcs.log.CommitId
+import com.intellij.vcs.log.VcsLogCommitSelection
+import com.intellij.vcs.log.VcsLogDataKeys
+import com.intellij.vcs.log.impl.HashImpl
 import dev.fatihdogmus.agenticreview.ReviewFileNavigator
 import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.diff.REVIEW_DIFF_EDITOR_KEY
 import dev.fatihdogmus.agenticreview.diff.ReviewDiffRequestData
-import dev.fatihdogmus.agenticreview.model.Review
 import dev.fatihdogmus.agenticreview.model.DiffSide
+import dev.fatihdogmus.agenticreview.model.Review
 import dev.fatihdogmus.agenticreview.model.ReviewTarget
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
-import dev.fatihdogmus.agenticreview.vcs.ChangedFile
-import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
-import dev.fatihdogmus.agenticreview.vcs.ReviewContent
-import com.intellij.vcs.log.VcsLogCommitSelection
-import com.intellij.vcs.log.VcsLogDataKeys
-import com.intellij.vcs.log.impl.HashImpl
 import dev.fatihdogmus.agenticreview.testutil.gitHead
 import dev.fatihdogmus.agenticreview.testutil.initGitRepo
 import dev.fatihdogmus.agenticreview.testutil.runGit
 import dev.fatihdogmus.agenticreview.testutil.write
+import dev.fatihdogmus.agenticreview.vcs.ChangedFile
+import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
+import dev.fatihdogmus.agenticreview.vcs.ReviewContent
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -135,7 +135,13 @@ class ReviewActionsIntegrationTest {
     fun startReviewFromGitLogActionPerformedReturnsEarlyWithoutContext() {
         val action = StartReviewFromGitLogAction()
 
-        action.actionPerformed(AnActionEvent.createFromDataContext("test", Presentation(), SimpleDataContext.EMPTY_CONTEXT))
+        action.actionPerformed(
+            AnActionEvent.createFromDataContext(
+                "test",
+                Presentation(),
+                SimpleDataContext.EMPTY_CONTEXT
+            )
+        )
         action.actionPerformed(projectEvent())
 
         assertThat(true).isTrue()
@@ -153,7 +159,8 @@ class ReviewActionsIntegrationTest {
         runGit(repoRoot, "add", ".")
         runGit(repoRoot, "commit", "-m", "second")
         val second = gitHead(repoRoot)
-        val event = eventWithData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION, realCommitSelection(listOf(first, second), repoRoot))
+        val event =
+            eventWithData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION, realCommitSelection(listOf(first, second), repoRoot))
         val manager = ReviewManagerService.getInstance(project)
         val before = manager.listReviews().size
 
@@ -168,14 +175,21 @@ class ReviewActionsIntegrationTest {
     @Test
     fun openReviewedFileActionUpdateFollowsEditorContextAndDeletionStatus() {
         ApplicationManager.getApplication().invokeAndWait {
-            val editor = EditorFactory.getInstance().createViewer(EditorFactory.getInstance().createDocument("text"), project) as EditorEx
+            val editor = EditorFactory.getInstance()
+                .createViewer(EditorFactory.getInstance().createDocument("text"), project) as EditorEx
             try {
-                editor.putUserData(REVIEW_DIFF_EDITOR_KEY, ReviewDiffRequestData("review", sampleChangedFile(ChangedFileStatus.DELETED), DiffSide.RIGHT))
+                editor.putUserData(
+                    REVIEW_DIFF_EDITOR_KEY,
+                    ReviewDiffRequestData("review", sampleChangedFile(ChangedFileStatus.DELETED), DiffSide.RIGHT)
+                )
                 val deletedEvent = eventWithEditor(editor)
                 OpenReviewedFileAction().update(deletedEvent)
                 assertThat(deletedEvent.presentation.isEnabledAndVisible).isFalse()
 
-                editor.putUserData(REVIEW_DIFF_EDITOR_KEY, ReviewDiffRequestData("review", sampleChangedFile(ChangedFileStatus.MODIFIED), DiffSide.RIGHT))
+                editor.putUserData(
+                    REVIEW_DIFF_EDITOR_KEY,
+                    ReviewDiffRequestData("review", sampleChangedFile(ChangedFileStatus.MODIFIED), DiffSide.RIGHT)
+                )
                 val modifiedEvent = eventWithEditor(editor)
                 OpenReviewedFileAction().update(modifiedEvent)
                 assertThat(modifiedEvent.presentation.isEnabledAndVisible).isTrue()
@@ -188,10 +202,17 @@ class ReviewActionsIntegrationTest {
     @Test
     fun openReviewedFileActionPerformedReturnsEarlyWithoutProjectEditorOrRequestData() {
         val action = OpenReviewedFileAction()
-        action.actionPerformed(AnActionEvent.createFromDataContext("test", Presentation(), SimpleDataContext.EMPTY_CONTEXT))
+        action.actionPerformed(
+            AnActionEvent.createFromDataContext(
+                "test",
+                Presentation(),
+                SimpleDataContext.EMPTY_CONTEXT
+            )
+        )
 
         ApplicationManager.getApplication().invokeAndWait {
-            val editor = EditorFactory.getInstance().createViewer(EditorFactory.getInstance().createDocument("text"), project) as EditorEx
+            val editor = EditorFactory.getInstance()
+                .createViewer(EditorFactory.getInstance().createDocument("text"), project) as EditorEx
             try {
                 action.actionPerformed(eventWithEditor(editor))
             } finally {
@@ -218,16 +239,22 @@ class ReviewActionsIntegrationTest {
         Files.writeString(Path.of(project.basePath!!, "src", "Foo.kt"), "class Foo\n")
 
         ApplicationManager.getApplication().invokeAndWait {
-            val editor = EditorFactory.getInstance().createViewer(EditorFactory.getInstance().createDocument("text"), project) as EditorEx
+            val editor = EditorFactory.getInstance()
+                .createViewer(EditorFactory.getInstance().createDocument("text"), project) as EditorEx
             try {
-                editor.putUserData(REVIEW_DIFF_EDITOR_KEY, ReviewDiffRequestData(review.id, sampleChangedFile(ChangedFileStatus.MODIFIED), DiffSide.RIGHT))
+                editor.putUserData(
+                    REVIEW_DIFF_EDITOR_KEY,
+                    ReviewDiffRequestData(review.id, sampleChangedFile(ChangedFileStatus.MODIFIED), DiffSide.RIGHT)
+                )
                 OpenReviewedFileAction().actionPerformed(eventWithEditor(editor))
             } finally {
                 EditorFactory.getInstance().releaseEditor(editor)
             }
         }
 
-        assertThat(LocalFileSystem.getInstance().findFileByNioFile(Path.of(project.basePath!!, "src", "Foo.kt"))).isNotNull
+        assertThat(
+            LocalFileSystem.getInstance().findFileByNioFile(Path.of(project.basePath!!, "src", "Foo.kt"))
+        ).isNotNull
     }
 
     private fun projectEvent(): AnActionEvent {
@@ -241,13 +268,19 @@ class ReviewActionsIntegrationTest {
     }
 
     private fun eventWithEditor(editor: EditorEx): AnActionEvent {
-        val dataContext = SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).add(CommonDataKeys.EDITOR, editor).build()
+        val dataContext =
+            SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).add(CommonDataKeys.EDITOR, editor).build()
         return AnActionEvent.createFromDataContext("test", Presentation(), dataContext)
     }
 
     private fun fakeCommitSelection(withCommits: Boolean): VcsLogCommitSelection {
         return TestCommitSelection(
-            commits = if (withCommits) listOf(CommitId(HashImpl.build("1234567890abcdef1234567890abcdef12345678"), LocalFileSystem.getInstance().refreshAndFindFileByNioFile(Path.of(project.basePath!!))!!)) else emptyList(),
+            commits = if (withCommits) listOf(
+                CommitId(
+                    HashImpl.build("1234567890abcdef1234567890abcdef12345678"),
+                    LocalFileSystem.getInstance().refreshAndFindFileByNioFile(Path.of(project.basePath!!))!!
+                )
+            ) else emptyList(),
         )
     }
 
@@ -269,7 +302,11 @@ class ReviewActionsIntegrationTest {
         filePath = "src/Foo.kt",
         status = status,
         beforeContent = ReviewContent("before\n", "before", "src/Foo.kt"),
-        afterContent = if (status == ChangedFileStatus.DELETED) null else ReviewContent("after\n", "after", "src/Foo.kt"),
+        afterContent = if (status == ChangedFileStatus.DELETED) null else ReviewContent(
+            "after\n",
+            "after",
+            "src/Foo.kt"
+        ),
     )
 
     private class TestCommitSelection(

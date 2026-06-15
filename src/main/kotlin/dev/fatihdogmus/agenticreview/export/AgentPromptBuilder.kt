@@ -9,7 +9,12 @@ class AgentPromptBuilder {
     fun build(review: Review): String = buildString {
         val openComments = review.comments
             .filter { it.status == CommentStatus.OPEN }
-            .sortedWith(compareBy({ it.filePath }, { it.anchor.newLine ?: it.anchor.oldLine ?: Int.MAX_VALUE }, { it.createdAt }))
+            .sortedWith(
+                compareBy(
+                    { it.filePath },
+                    { it.anchor.newLine ?: it.anchor.oldLine ?: Int.MAX_VALUE },
+                    { it.createdAt })
+            )
 
         appendLine("# Agentic Review")
         appendLine()

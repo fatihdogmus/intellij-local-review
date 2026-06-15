@@ -63,10 +63,11 @@ class UncommittedChangesProvider(private val project: Project) {
         Path.of(repositoryRoot).relativize(Path.of(this)).toString().replace('\\', '/')
     }.getOrDefault(replace('\\', '/'))
 
-    internal fun mapStatus(type: Change.Type, beforePath: String?, afterPath: String?): ChangedFileStatus = when (type) {
-        Change.Type.NEW -> ChangedFileStatus.ADDED
-        Change.Type.MODIFICATION -> if (beforePath != null && afterPath != null && beforePath != afterPath) ChangedFileStatus.RENAMED else ChangedFileStatus.MODIFIED
-        Change.Type.DELETED -> ChangedFileStatus.DELETED
-        Change.Type.MOVED -> ChangedFileStatus.RENAMED
-    }
+    internal fun mapStatus(type: Change.Type, beforePath: String?, afterPath: String?): ChangedFileStatus =
+        when (type) {
+            Change.Type.NEW -> ChangedFileStatus.ADDED
+            Change.Type.MODIFICATION -> if (beforePath != null && afterPath != null && beforePath != afterPath) ChangedFileStatus.RENAMED else ChangedFileStatus.MODIFIED
+            Change.Type.DELETED -> ChangedFileStatus.DELETED
+            Change.Type.MOVED -> ChangedFileStatus.RENAMED
+        }
 }

@@ -7,10 +7,10 @@ import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.JBColor
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.PlatformIcons
 import com.intellij.util.ui.JBUI
@@ -29,15 +29,7 @@ import java.awt.event.MouseAdapter
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeFormatter
-import javax.swing.DefaultListCellRenderer
-import javax.swing.JComboBox
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JList
-import javax.swing.JPanel
-import javax.swing.ListCellRenderer
-import javax.swing.JTree
-import javax.swing.UIManager
+import javax.swing.*
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.TreePath
@@ -90,10 +82,12 @@ class ChangedFilesPanel {
             override fun mousePressed(e: java.awt.event.MouseEvent) {
                 tree.requestFocusInWindow()
             }
+
             override fun mouseClicked(e: java.awt.event.MouseEvent) {
                 tree.requestFocusInWindow()
                 if (e.clickCount == 2) {
-                    selectedFile()?.takeIf { it.status != ChangedFileStatus.DELETED }?.let { onOpenRequested?.invoke(it) }
+                    selectedFile()?.takeIf { it.status != ChangedFileStatus.DELETED }
+                        ?.let { onOpenRequested?.invoke(it) }
                 }
             }
         })
@@ -101,7 +95,10 @@ class ChangedFilesPanel {
             override fun actionPerformed(e: AnActionEvent) {
                 selectedFile()?.takeIf { it.status != ChangedFileStatus.DELETED }?.let { onDeleteRequested?.invoke(it) }
             }
-        }.registerCustomShortcutSet(ActionManager.getInstance().getAction(IdeActions.ACTION_DELETE).shortcutSet, component)
+        }.registerCustomShortcutSet(
+            ActionManager.getInstance().getAction(IdeActions.ACTION_DELETE).shortcutSet,
+            component
+        )
         component.preferredSize = Dimension(JBUI.scale(280), JBUI.scale(260))
         component.minimumSize = Dimension(JBUI.scale(220), JBUI.scale(180))
         component.background = tree.background
@@ -137,7 +134,8 @@ class ChangedFilesPanel {
             return
         }
         val previousId = (turnCombo.selectedItem as? TurnComboItem)?.turn?.id
-        turnFilesById = turnSnapshotService.getCompletedTurns().associate { it.id to turnSnapshotService.getTurnDiffs(it.id) }
+        turnFilesById =
+            turnSnapshotService.getCompletedTurns().associate { it.id to turnSnapshotService.getTurnDiffs(it.id) }
         turnCombo.removeAllItems()
         turnCombo.addItem(TurnComboItem("Review Changes", null))
         for (turn in turnSnapshotService.getCompletedTurns()) {
@@ -165,12 +163,16 @@ class ChangedFilesPanel {
         val agent = turn.agent ?: "unknown"
         val started = try {
             Instant.parse(turn.startedAt).atZone(java.time.ZoneId.systemDefault()).toLocalTime().format(FMT)
-        } catch (_: Exception) { "?" }
+        } catch (_: Exception) {
+            "?"
+        }
         val duration = if (turn.endedAt != null) {
             try {
                 val d = Duration.between(Instant.parse(turn.startedAt), Instant.parse(turn.endedAt))
                 "${d.seconds}s"
-            } catch (_: Exception) { "" }
+            } catch (_: Exception) {
+                ""
+            }
         } else ""
         val count = turn.changedPaths.size
         return "$started  $agent  $duration  $count files"
@@ -371,7 +373,8 @@ private class ChangedFileTreeRenderer(
         val fileType = FileTypeManager.getInstance().getFileTypeByFileName(file.filePath)
         val unseen = unseenState(file)
         val lineStats = estimateLineStats(file)
-        val textAttributes = if (unseen == true) SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES else SimpleTextAttributes.REGULAR_ATTRIBUTES
+        val textAttributes =
+            if (unseen == true) SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES else SimpleTextAttributes.REGULAR_ATTRIBUTES
         val name = file.filePath.substringAfterLast('/')
 
         icon = fileType.icon

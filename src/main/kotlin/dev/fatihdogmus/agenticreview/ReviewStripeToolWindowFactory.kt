@@ -1,9 +1,9 @@
 package dev.fatihdogmus.agenticreview
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowAnchor
 import com.intellij.openapi.wm.ToolWindowFactory
@@ -22,12 +22,13 @@ class ReviewStripeToolWindowFactory : ToolWindowFactory, DumbAware {
             content.setDisposer(disposable)
             toolWindow.contentManager.addContent(content)
 
-            project.messageBus.connect(disposable).subscribe(ToolWindowManagerListener.TOPIC, object : ToolWindowManagerListener {
-                override fun toolWindowShown(shownToolWindow: ToolWindow) {
-                    if (shownToolWindow.id != toolWindow.id) return
-                    openReviewAndHide(project, shownToolWindow)
-                }
-            })
+            project.messageBus.connect(disposable)
+                .subscribe(ToolWindowManagerListener.TOPIC, object : ToolWindowManagerListener {
+                    override fun toolWindowShown(shownToolWindow: ToolWindow) {
+                        if (shownToolWindow.id != toolWindow.id) return
+                        openReviewAndHide(project, shownToolWindow)
+                    }
+                })
         }
 
         openReviewAndHide(project, toolWindow)

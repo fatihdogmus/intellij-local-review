@@ -1,14 +1,7 @@
 package dev.fatihdogmus.agenticreview.export
 
 import dev.fatihdogmus.agenticreview.diff.DiffContextExtractor
-import dev.fatihdogmus.agenticreview.model.CommentAnchor
-import dev.fatihdogmus.agenticreview.model.CommentStatus
-import dev.fatihdogmus.agenticreview.model.DiffSide
-import dev.fatihdogmus.agenticreview.model.Review
-import dev.fatihdogmus.agenticreview.model.ReviewComment
-import dev.fatihdogmus.agenticreview.model.ReviewStatus
-import dev.fatihdogmus.agenticreview.model.ReviewTarget
-import dev.fatihdogmus.agenticreview.model.ReviewTargetType
+import dev.fatihdogmus.agenticreview.model.*
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
 import dev.fatihdogmus.agenticreview.vcs.ReviewContent
@@ -28,7 +21,11 @@ class ReviewUnitTest {
 
     @Test
     fun promptBuilderIncludesEscapedTextAndMetadata() {
-        val review = sampleReview().copy(comments = mutableListOf(sampleReview().comments.first().copy(body = "Use <safe> & clear")))
+        val review = sampleReview().copy(
+            comments = mutableListOf(
+                sampleReview().comments.first().copy(body = "Use <safe> & clear")
+            )
+        )
 
         val exported = AgentPromptBuilder().build(review)
 
@@ -88,9 +85,27 @@ class ReviewUnitTest {
         val base = sampleReview().comments.first()
         val review = sampleReview().copy(
             comments = mutableListOf(
-                base.copy(id = "c3", filePath = "src/Zed.kt", anchor = CommentAnchor(oldLine = 5), body = "zed", createdAt = "2026-05-07T14:22:00+03:00"),
-                base.copy(id = "c2", filePath = "src/Foo.kt", anchor = CommentAnchor(oldLine = 3), body = "foo-old", createdAt = "2026-05-07T14:21:00+03:00"),
-                base.copy(id = "c1", filePath = "src/Foo.kt", anchor = CommentAnchor(oldLine = 3), body = "foo-earlier", createdAt = "2026-05-07T14:20:00+03:00"),
+                base.copy(
+                    id = "c3",
+                    filePath = "src/Zed.kt",
+                    anchor = CommentAnchor(oldLine = 5),
+                    body = "zed",
+                    createdAt = "2026-05-07T14:22:00+03:00"
+                ),
+                base.copy(
+                    id = "c2",
+                    filePath = "src/Foo.kt",
+                    anchor = CommentAnchor(oldLine = 3),
+                    body = "foo-old",
+                    createdAt = "2026-05-07T14:21:00+03:00"
+                ),
+                base.copy(
+                    id = "c1",
+                    filePath = "src/Foo.kt",
+                    anchor = CommentAnchor(oldLine = 3),
+                    body = "foo-earlier",
+                    createdAt = "2026-05-07T14:20:00+03:00"
+                ),
             ),
         )
 

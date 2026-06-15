@@ -27,35 +27,36 @@
         <postStartupActivity implementation="dev.fatihdogmus.agenticreview.EnableMcpServerOnStartupActivity"/>
         <mcpServer.mcpToolset implementation="dev.fatihdogmus.agenticreview.mcp.ReviewMcpToolset"/>
         <notificationGroup id="Agentic Review" displayType="BALLOON" isLogByDefault="false"/>
-        <toolWindow id="Agentic Review" anchor="left" secondary="true" factoryClass="dev.fatihdogmus.agenticreview.ReviewStripeToolWindowFactory"/>
+        <toolWindow id="Agentic Review" anchor="left" secondary="true"
+                    factoryClass="dev.fatihdogmus.agenticreview.ReviewStripeToolWindowFactory"/>
     </extensions>
 
     <actions>
         <action
-            id="AgenticReview.OpenReviewDialog"
-            class="dev.fatihdogmus.agenticreview.actions.OpenReviewDialogAction"
-            text="Open Agentic Review">
+                id="AgenticReview.OpenReviewDialog"
+                class="dev.fatihdogmus.agenticreview.actions.OpenReviewDialogAction"
+                text="Open Agentic Review">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <keyboard-shortcut keymap="$default" first-keystroke="shift alt P"/>
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift P"/>
         </action>
         <action
-            id="AgenticReview.StartReviewFromGitLog"
-            class="dev.fatihdogmus.agenticreview.actions.StartReviewFromGitLogAction"
-            text="Create Agentic Review">
+                id="AgenticReview.StartReviewFromGitLog"
+                class="dev.fatihdogmus.agenticreview.actions.StartReviewFromGitLogAction"
+                text="Create Agentic Review">
             <add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
             <add-to-group group-id="Vcs.Log.Toolbar.RightCorner" anchor="last"/>
         </action>
         <action
-            id="AgenticReview.AddComment"
-            class="dev.fatihdogmus.agenticreview.actions.AddReviewCommentAction"
-            text="Add Review Comment">
+                id="AgenticReview.AddComment"
+                class="dev.fatihdogmus.agenticreview.actions.AddReviewCommentAction"
+                text="Add Review Comment">
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
         </action>
         <action
-            id="AgenticReview.OpenReviewedFile"
-            class="dev.fatihdogmus.agenticreview.actions.OpenReviewedFileAction"
-            text="Go to File">
+                id="AgenticReview.OpenReviewedFile"
+                class="dev.fatihdogmus.agenticreview.actions.OpenReviewedFileAction"
+                text="Go to File">
             <add-to-group group-id="Diff.EditorPopupMenu" anchor="last"/>
         </action>
     </actions>

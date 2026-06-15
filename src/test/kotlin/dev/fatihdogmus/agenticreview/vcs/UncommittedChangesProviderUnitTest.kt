@@ -27,12 +27,24 @@ class UncommittedChangesProviderUnitTest {
 
     @Test
     fun mapStatusModification() {
-        assertThat(provider.mapStatus(Change.Type.MODIFICATION, "same/path", "same/path")).isEqualTo(ChangedFileStatus.MODIFIED)
+        assertThat(
+            provider.mapStatus(
+                Change.Type.MODIFICATION,
+                "same/path",
+                "same/path"
+            )
+        ).isEqualTo(ChangedFileStatus.MODIFIED)
     }
 
     @Test
     fun mapStatusRename() {
-        assertThat(provider.mapStatus(Change.Type.MODIFICATION, "old/path", "new/path")).isEqualTo(ChangedFileStatus.RENAMED)
+        assertThat(
+            provider.mapStatus(
+                Change.Type.MODIFICATION,
+                "old/path",
+                "new/path"
+            )
+        ).isEqualTo(ChangedFileStatus.RENAMED)
     }
 
     @Test

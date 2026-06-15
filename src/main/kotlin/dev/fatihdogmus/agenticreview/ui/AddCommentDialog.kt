@@ -6,11 +6,7 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.dsl.builder.panel
 import dev.fatihdogmus.agenticreview.model.DiffSide
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
-import javax.swing.JComponent
-import javax.swing.JComboBox
-import javax.swing.JSpinner
-import javax.swing.JTextArea
-import javax.swing.SpinnerNumberModel
+import javax.swing.*
 
 class AddCommentDialog(project: Project, changedFile: ChangedFile) : DialogWrapper(project) {
     private val sideCombo = JComboBox(DiffSide.entries.toTypedArray())

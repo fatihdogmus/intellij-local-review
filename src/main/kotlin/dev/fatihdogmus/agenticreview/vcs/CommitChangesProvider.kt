@@ -110,7 +110,11 @@ class CommitChangesProvider(private val project: Project) {
         return getChangedFilesBetween(repositoryRoot, baseRevision, headRevision)
     }
 
-    private fun getChangedFilesBetween(repositoryRoot: String, baseRevision: String, headRevision: String): List<ChangedFile> {
+    private fun getChangedFilesBetween(
+        repositoryRoot: String,
+        baseRevision: String,
+        headRevision: String
+    ): List<ChangedFile> {
         val git = GitCommandFallback(repositoryRoot)
         return git.run("diff", "--name-status", baseRevision, headRevision)
             .lineSequence()
@@ -143,8 +147,16 @@ class CommitChangesProvider(private val project: Project) {
                 ChangedFile(
                     filePath = path,
                     status = status,
-                    beforeContent = if (status == ChangedFileStatus.ADDED) null else loadRevisionContent(git, parent, path),
-                    afterContent = if (status == ChangedFileStatus.DELETED) null else loadRevisionContent(git, commitHash, path),
+                    beforeContent = if (status == ChangedFileStatus.ADDED) null else loadRevisionContent(
+                        git,
+                        parent,
+                        path
+                    ),
+                    afterContent = if (status == ChangedFileStatus.DELETED) null else loadRevisionContent(
+                        git,
+                        commitHash,
+                        path
+                    ),
                 )
             }
         }

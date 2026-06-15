@@ -2,13 +2,7 @@ package dev.fatihdogmus.agenticreview
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.fatihdogmus.agenticreview.ReviewManagerService
-import dev.fatihdogmus.agenticreview.model.CommentAnchor
-import dev.fatihdogmus.agenticreview.model.CommentStatus
-import dev.fatihdogmus.agenticreview.model.DiffSide
-import dev.fatihdogmus.agenticreview.model.ReviewComment
-import dev.fatihdogmus.agenticreview.model.ReviewStatus
-import dev.fatihdogmus.agenticreview.model.ReviewTargetType
+import dev.fatihdogmus.agenticreview.model.*
 import dev.fatihdogmus.agenticreview.persistence.SavedReviewArchive
 import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
@@ -54,7 +48,7 @@ class ReviewImportValidationTest {
     @Test
     fun loadReviewFromFileReturnsGenericMalformedErrorForInvalidJsonSyntax() {
         val manager = configuredManager()
-        val file = writeRawJson("syntax-error.json", "{" )
+        val file = writeRawJson("syntax-error.json", "{")
 
         val result = manager.loadReviewFromFile(file)
 

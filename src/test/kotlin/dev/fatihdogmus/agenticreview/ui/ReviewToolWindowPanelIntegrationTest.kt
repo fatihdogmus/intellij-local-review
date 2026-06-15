@@ -5,12 +5,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.ReviewManagerService
-import dev.fatihdogmus.agenticreview.model.CommentAnchor
-import dev.fatihdogmus.agenticreview.model.CommentStatus
-import dev.fatihdogmus.agenticreview.model.Review
-import dev.fatihdogmus.agenticreview.model.ReviewComment
-import dev.fatihdogmus.agenticreview.model.ReviewTarget
-import dev.fatihdogmus.agenticreview.model.ReviewTargetType
+import dev.fatihdogmus.agenticreview.model.*
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.testutil.reviewSelector
@@ -127,7 +122,8 @@ class ReviewToolWindowPanelIntegrationTest {
             try {
                 @Suppress("UNCHECKED_CAST")
                 val selector = reviewSelector(panel) as JComboBox<Review>
-                val label = selector.renderer.getListCellRendererComponent(JList<Review>(), review, 0, false, false) as JLabel
+                val label =
+                    selector.renderer.getListCellRendererComponent(JList<Review>(), review, 0, false, false) as JLabel
 
                 assertThat(label.text).isEqualTo("Renderer review · 1 Open 1 Resolved")
             } finally {
@@ -148,5 +144,6 @@ class ReviewToolWindowPanelIntegrationTest {
         }
     }
 
-    private fun initGitRepoWithCommit(): String = dev.fatihdogmus.agenticreview.testutil.initGitRepoWithCommit(Path.of(project.basePath!!))
+    private fun initGitRepoWithCommit(): String =
+        dev.fatihdogmus.agenticreview.testutil.initGitRepoWithCommit(Path.of(project.basePath!!))
 }

@@ -18,46 +18,20 @@ import com.intellij.util.IconUtil
 import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.diff.ReviewDiffRequestData
 import dev.fatihdogmus.agenticreview.model.ReviewComment
-import java.awt.Toolkit
-import java.awt.BorderLayout
-import java.awt.Color
-import java.awt.Component
-import java.awt.Cursor
-import java.awt.Dimension
-import java.awt.FlowLayout
-import java.awt.Graphics
-import java.awt.Graphics2D
-import java.awt.GraphicsEnvironment
-import java.awt.Insets
-import java.awt.RenderingHints
-import java.awt.event.ActionEvent
-import java.awt.event.InputEvent
-import java.awt.event.FocusAdapter
-import java.awt.event.FocusEvent
-import java.awt.event.KeyEvent
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
-import javax.swing.AbstractAction
-import javax.swing.BorderFactory
-import javax.swing.JButton
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JMenuItem
-import javax.swing.JPanel
-import javax.swing.JPopupMenu
-import javax.swing.JScrollPane
-import javax.swing.KeyStroke
-import javax.swing.SwingUtilities
-import javax.swing.UIManager
+import java.awt.*
+import java.awt.event.*
+import javax.swing.*
 import javax.swing.border.AbstractBorder
 
 private const val PLACEHOLDER_TEXT = "Add comment"
 private const val COMMENT_ACTIONS_PLACE = "AgenticReview.CommentActions"
 private const val COMMENT_CARD_ARC = 18
-private val BLUE_BORDER = UIManager.getColor("Component.focusColor") ?: JBColor(Color(0x35, 0x7A, 0xB8), Color(0x6C, 0xB8, 0xFF))
+private val BLUE_BORDER =
+    UIManager.getColor("Component.focusColor") ?: JBColor(Color(0x35, 0x7A, 0xB8), Color(0x6C, 0xB8, 0xFF))
 private val COMMENT_BORDER = UIManager.getColor("Component.borderColor") ?: JBColor.border()
 private val DELETE_RED = JBColor(Color(0xC4, 0x2B, 0x1C), Color(0xFF, 0x8E, 0x8A))
-private val MENU_HOVER_BG = UIManager.getColor("List.selectionBackground") ?: JBColor(Color(0xE8, 0xF1, 0xFF), Color(0x2C, 0x3D, 0x55))
+private val MENU_HOVER_BG =
+    UIManager.getColor("List.selectionBackground") ?: JBColor(Color(0xE8, 0xF1, 0xFF), Color(0x2C, 0x3D, 0x55))
 
 fun showReviewCommentInlays(
     project: Project,
@@ -89,7 +63,8 @@ fun showInlineCommentForm(
 @Suppress("UnstableApiUsage")
 private fun insertInlineComponent(editor: EditorEx, line: Int, component: JPanel): Inlay<*>? {
     val safeLine = line.coerceIn(0, (editor.document.lineCount - 1).coerceAtLeast(0))
-    val offset = if (editor.document.lineCount > 0) editor.document.getLineEndOffset(safeLine) else editor.document.textLength
+    val offset =
+        if (editor.document.lineCount > 0) editor.document.getLineEndOffset(safeLine) else editor.document.textLength
     return editor.addComponentInlay(
         offset,
         InlayProperties()
@@ -260,17 +235,29 @@ private class ExistingCommentPanel(
             isVisible = true
             addActionListener {
                 val group = DefaultActionGroup().apply {
-                    add(object : AnAction("Edit comment", null, IconUtil.colorize(AllIcons.Actions.Edit, BLUE_BORDER, false, false)) {
+                    add(object : AnAction(
+                        "Edit comment",
+                        null,
+                        IconUtil.colorize(AllIcons.Actions.Edit, BLUE_BORDER, false, false)
+                    ) {
                         override fun actionPerformed(e: AnActionEvent) {
                             enterEditMode()
                         }
                     })
-                    add(object : AnAction("Resolve comment", null, IconUtil.colorize(AllIcons.Actions.Checked, BLUE_BORDER, false, false)) {
+                    add(object : AnAction(
+                        "Resolve comment",
+                        null,
+                        IconUtil.colorize(AllIcons.Actions.Checked, BLUE_BORDER, false, false)
+                    ) {
                         override fun actionPerformed(e: AnActionEvent) {
                             resolveCommentAndDismiss(project, comment.id, ::dismiss)
                         }
                     })
-                    add(object : AnAction("Delete comment", null, IconUtil.colorize(AllIcons.General.Remove, DELETE_RED, false, false)) {
+                    add(object : AnAction(
+                        "Delete comment",
+                        null,
+                        IconUtil.colorize(AllIcons.General.Remove, DELETE_RED, false, false)
+                    ) {
                         override fun actionPerformed(e: AnActionEvent) {
                             deleteCommentAndDismiss(project, comment.id, ::dismiss)
                         }
@@ -298,7 +285,7 @@ private class ExistingCommentPanel(
             cursor = Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR)
         }
 
-                val saveButton = JButton("Save").apply {
+        val saveButton = JButton("Save").apply {
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             addActionListener {
                 val updatedBody = body.text.trim()

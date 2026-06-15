@@ -2,30 +2,23 @@ package dev.fatihdogmus.agenticreview
 
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
-import dev.fatihdogmus.agenticreview.model.CommentStatus
-import dev.fatihdogmus.agenticreview.model.DiffSide
-import dev.fatihdogmus.agenticreview.model.Review
-import dev.fatihdogmus.agenticreview.model.ReviewTarget
-import dev.fatihdogmus.agenticreview.model.ReviewTargetType
+import dev.fatihdogmus.agenticreview.model.*
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import dev.fatihdogmus.agenticreview.persistence.SavedReviewArchive
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
-import dev.fatihdogmus.agenticreview.vcs.BranchReviewMetadata
-import dev.fatihdogmus.agenticreview.vcs.ChangedFile
-import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
-import dev.fatihdogmus.agenticreview.vcs.ReviewContent
-import dev.fatihdogmus.agenticreview.ReviewManagerService
-import dev.fatihdogmus.agenticreview.model.CommentAnchor
-import dev.fatihdogmus.agenticreview.model.ReviewComment
-import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.api.Assertions.assertThatThrownBy
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 import dev.fatihdogmus.agenticreview.testutil.gitHead
 import dev.fatihdogmus.agenticreview.testutil.initGitRepo
 import dev.fatihdogmus.agenticreview.testutil.runGit
 import dev.fatihdogmus.agenticreview.testutil.write
+import dev.fatihdogmus.agenticreview.vcs.BranchReviewMetadata
+import dev.fatihdogmus.agenticreview.vcs.ChangedFile
+import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
+import dev.fatihdogmus.agenticreview.vcs.ReviewContent
 import kotlinx.serialization.json.Json
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -547,7 +540,8 @@ class ReviewManagerServiceTest {
         runGit(repoRoot, "commit", "-m", "second")
         val second = gitHead(repoRoot)
 
-        val commitReview = seededCommitReview("load-commit").apply { repositoryRoot = repoRoot.toString(); target.commitHash = second }
+        val commitReview =
+            seededCommitReview("load-commit").apply { repositoryRoot = repoRoot.toString(); target.commitHash = second }
         val rangeReview = Review(
             id = "review-range-load",
             title = "Range",
@@ -611,7 +605,14 @@ class ReviewManagerServiceTest {
         manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 1, "todo")
         val commentId = manager.findReview(review.id)!!.comments.single().id
 
-        assertThat(manager.markCommentResolved(commentId, message = "done", agentName = "opencode", runId = "run-1")).isTrue()
+        assertThat(
+            manager.markCommentResolved(
+                commentId,
+                message = "done",
+                agentName = "opencode",
+                runId = "run-1"
+            )
+        ).isTrue()
 
         val comment = manager.findReview(review.id)!!.comments.single()
         assertThat(comment.status).isEqualTo(CommentStatus.RESOLVED)

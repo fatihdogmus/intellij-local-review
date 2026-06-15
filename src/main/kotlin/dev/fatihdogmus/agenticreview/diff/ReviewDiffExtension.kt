@@ -13,29 +13,18 @@ import com.intellij.openapi.editor.event.EditorMouseMotionListener
 import com.intellij.openapi.editor.event.SelectionEvent
 import com.intellij.openapi.editor.event.SelectionListener
 import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.editor.markup.ActiveGutterRenderer
-import com.intellij.openapi.editor.markup.HighlighterLayer
-import com.intellij.openapi.editor.markup.HighlighterTargetArea
-import com.intellij.openapi.editor.markup.LineMarkerRendererEx
-import com.intellij.openapi.editor.markup.RangeHighlighter
-import com.intellij.openapi.editor.markup.TextAttributes
+import com.intellij.openapi.editor.markup.*
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.Key
 import com.intellij.ui.JBColor
-import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.ReviewFileNavigator
-import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
+import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.model.DiffSide
 import dev.fatihdogmus.agenticreview.ui.showInlineCommentForm
 import dev.fatihdogmus.agenticreview.ui.showReviewCommentInlays
-import java.awt.BasicStroke
-import java.awt.Color
-import java.awt.Font
-import java.awt.Graphics
-import java.awt.Graphics2D
-import java.awt.Rectangle
-import java.awt.RenderingHints
+import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
+import java.awt.*
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
@@ -65,6 +54,7 @@ class ReviewDiffExtension : DiffExtension() {
                 DiffSide.LEFT -> viewer.editor1
                 DiffSide.RIGHT -> viewer.editor2
             }
+
             is OnesideTextDiffViewer -> viewer.editor
             else -> return
         }
@@ -106,7 +96,11 @@ private fun installOpenFileShortcut(project: Project, editor: EditorEx, requestD
     editor.contentComponent.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_F4, 0), actionKey)
     editor.contentComponent.actionMap.put(actionKey, object : AbstractAction() {
         override fun actionPerformed(e: ActionEvent?) {
-            ReviewFileNavigator.openChangedFile(project, ReviewManagerService.getInstance(project).findReview(requestData.reviewId)?.repositoryRoot ?: return, requestData.changedFile)
+            ReviewFileNavigator.openChangedFile(
+                project,
+                ReviewManagerService.getInstance(project).findReview(requestData.reviewId)?.repositoryRoot ?: return,
+                requestData.changedFile
+            )
         }
     })
 }

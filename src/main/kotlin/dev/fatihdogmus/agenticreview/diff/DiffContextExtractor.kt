@@ -23,9 +23,13 @@ class DiffContextExtractor {
         }
         val contextStart = (index - 2).coerceAtLeast(0)
         val contextEnd = ((endIndex ?: index) + 3).coerceAtMost(lines.size)
-        val before = if (index <= 0 || lines.isEmpty()) emptyList() else lines.subList(contextStart, index.coerceAtMost(lines.size))
+        val before = if (index <= 0 || lines.isEmpty()) emptyList() else lines.subList(
+            contextStart,
+            index.coerceAtMost(lines.size)
+        )
         val afterStart = ((endIndex ?: index) + 1).coerceAtMost(lines.size)
-        val after = if (lines.isEmpty() || afterStart >= lines.size) emptyList() else lines.subList(afterStart, contextEnd)
+        val after =
+            if (lines.isEmpty() || afterStart >= lines.size) emptyList() else lines.subList(afterStart, contextEnd)
         return CommentAnchor(
             side = side,
             oldLine = if (side == DiffSide.LEFT) lineNumber else null,

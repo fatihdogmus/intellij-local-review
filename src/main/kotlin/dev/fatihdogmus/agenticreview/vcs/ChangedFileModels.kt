@@ -1,7 +1,7 @@
 package dev.fatihdogmus.agenticreview.vcs
 
-import java.security.MessageDigest
 import kotlinx.serialization.Serializable
+import java.security.MessageDigest
 
 @Serializable
 data class ChangedFile(

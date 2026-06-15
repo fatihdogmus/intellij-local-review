@@ -4,10 +4,10 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
+import dev.fatihdogmus.agenticreview.testutil.reviewTree
+import dev.fatihdogmus.agenticreview.testutil.runGit
 import dev.fatihdogmus.agenticreview.testutil.titleLabel
 import dev.fatihdogmus.agenticreview.testutil.turnCombo
-import dev.fatihdogmus.agenticreview.testutil.runGit
-import dev.fatihdogmus.agenticreview.testutil.reviewTree
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
 import dev.fatihdogmus.agenticreview.vcs.ReviewContent

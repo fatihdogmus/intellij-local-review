@@ -2,9 +2,9 @@ package dev.fatihdogmus.agenticreview.editor
 
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorState
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.UserDataHolderBase
 import dev.fatihdogmus.agenticreview.ui.ReviewToolWindowPanel
-import com.intellij.openapi.project.Project
 import java.beans.PropertyChangeListener
 import javax.swing.JComponent
 

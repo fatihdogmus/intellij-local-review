@@ -8,15 +8,11 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import dev.fatihdogmus.agenticreview.util.nowIso
-import dev.fatihdogmus.agenticreview.vcs.ChangedFile
-import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
-import dev.fatihdogmus.agenticreview.vcs.GitCommandFallback
-import dev.fatihdogmus.agenticreview.vcs.GitRepositoryResolver
-import dev.fatihdogmus.agenticreview.vcs.ReviewContent
+import dev.fatihdogmus.agenticreview.vcs.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
-import java.util.UUID
+import java.util.*
 
 @Service(Service.Level.PROJECT)
 class TurnSnapshotService(private val project: Project) : Disposable {

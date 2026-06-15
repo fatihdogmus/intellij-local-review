@@ -1,10 +1,10 @@
 package dev.fatihdogmus.agenticreview.testutil
 
+import com.intellij.dvcs.repo.VcsRepositoryManager
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
 import com.intellij.openapi.vcs.VcsDirectoryMapping
-import com.intellij.dvcs.repo.VcsRepositoryManager
 import git4idea.repo.GitRepositoryManager
 import java.nio.file.Files
 import java.nio.file.Path
@@ -38,7 +38,13 @@ fun initGitRepo(root: Path) {
 fun gitHead(root: Path): String = runGit(root, "rev-parse", "HEAD").trim()
 
 fun commitWithTimestamp(root: Path, message: String, timestamp: String) {
-    runGit(root, "commit", "-m", message, env = mapOf("GIT_AUTHOR_DATE" to timestamp, "GIT_COMMITTER_DATE" to timestamp))
+    runGit(
+        root,
+        "commit",
+        "-m",
+        message,
+        env = mapOf("GIT_AUTHOR_DATE" to timestamp, "GIT_COMMITTER_DATE" to timestamp)
+    )
 }
 
 fun configureGitMapping(project: Project, repoRoot: Path) {

@@ -7,9 +7,9 @@ import com.intellij.diff.util.DiffUtil
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.editor.ex.util.LexerEditorHighlighter
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.LanguageFileType
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
@@ -77,7 +77,8 @@ class DiffRequestBuilderIntegrationTest {
             afterContent = ReviewContent("after\n", "WORKTREE", "src/Foo.java"),
         )
 
-        val request = DiffRequestBuilder(project).buildForFile("review-1", changedFile, repoDir.toString()) as ContentDiffRequest
+        val request =
+            DiffRequestBuilder(project).buildForFile("review-1", changedFile, repoDir.toString()) as ContentDiffRequest
         val afterContent = request.contents[1] as? DocumentContent
 
         assertThat(afterContent).isNotNull
@@ -93,7 +94,11 @@ class DiffRequestBuilderIntegrationTest {
             afterContent = ReviewContent("after\n", "WORKTREE", "src/Foo.java"),
         )
 
-        val request = DiffRequestBuilder(project).buildForFile("review-1", changedFile, "/tmp/nonexistent-repo") as ContentDiffRequest
+        val request = DiffRequestBuilder(project).buildForFile(
+            "review-1",
+            changedFile,
+            "/tmp/nonexistent-repo"
+        ) as ContentDiffRequest
         val afterContent = request.contents[1] as? DocumentContent
 
         assertThat(afterContent).isNotNull
@@ -109,7 +114,11 @@ class DiffRequestBuilderIntegrationTest {
             afterContent = ReviewContent("<root/>\n", "abc123", "src/new-file.xml"),
         )
 
-        val request = DiffRequestBuilder(project).buildForFile("review-added", changedFile, "/tmp/nonexistent-repo") as ContentDiffRequest
+        val request = DiffRequestBuilder(project).buildForFile(
+            "review-added",
+            changedFile,
+            "/tmp/nonexistent-repo"
+        ) as ContentDiffRequest
         val afterContent = request.contents[1] as? DocumentContent
         val xmlFileType = FileTypeManager.getInstance().getFileTypeByFileName("new-file.xml") as LanguageFileType
 
@@ -130,7 +139,11 @@ class DiffRequestBuilderIntegrationTest {
             previousFilePath = "src/old/old-name.xml",
         )
 
-        val request = DiffRequestBuilder(project).buildForFile("review-renamed", changedFile, "/tmp/nonexistent-repo") as ContentDiffRequest
+        val request = DiffRequestBuilder(project).buildForFile(
+            "review-renamed",
+            changedFile,
+            "/tmp/nonexistent-repo"
+        ) as ContentDiffRequest
         val beforeContent = request.contents[0] as? DocumentContent
         val afterContent = request.contents[1] as? DocumentContent
         val xmlFileType = FileTypeManager.getInstance().getFileTypeByFileName("new-name.xml") as LanguageFileType

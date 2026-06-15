@@ -14,9 +14,11 @@ class ReviewPageEditorProvider : FileEditorProvider, DumbAware {
 
     override fun acceptRequiresReadAction(): Boolean = false
 
-    override fun createEditor(project: Project, file: VirtualFile): FileEditor = ReviewPageFileEditor(project, file as ReviewPageVirtualFile)
+    override fun createEditor(project: Project, file: VirtualFile): FileEditor =
+        ReviewPageFileEditor(project, file as ReviewPageVirtualFile)
 
-    override fun readState(element: Element, project: Project, file: VirtualFile): FileEditorState = FileEditorState.INSTANCE
+    override fun readState(element: Element, project: Project, file: VirtualFile): FileEditorState =
+        FileEditorState.INSTANCE
 
     override fun getEditorTypeId(): String = "agentic-review-page"
 

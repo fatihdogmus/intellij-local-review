@@ -4,31 +4,31 @@ import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.requests.MessageDiffRequest
 import com.intellij.icons.AllIcons
 import com.intellij.ide.DataManager
+import com.intellij.ide.util.DeleteHandler
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.DumbAwareAction
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiManager
-import com.intellij.ide.util.DeleteHandler
-import com.intellij.ui.JBSplitter
 import com.intellij.ui.JBColor
+import com.intellij.ui.JBSplitter
 import com.intellij.util.ui.JBUI
-import dev.fatihdogmus.agenticreview.editor.ReviewPageManager
 import dev.fatihdogmus.agenticreview.ReviewFileNavigator
 import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.VcsLogReviewSupport
 import dev.fatihdogmus.agenticreview.diff.DiffRequestBuilder
 import dev.fatihdogmus.agenticreview.diff.ReviewDiffPanel
+import dev.fatihdogmus.agenticreview.editor.ReviewPageManager
 import dev.fatihdogmus.agenticreview.export.ExportUiSupport
 import dev.fatihdogmus.agenticreview.model.Review
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
@@ -36,26 +36,10 @@ import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshot
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.seenKey
-import java.awt.BorderLayout
-import java.awt.Color
-import java.awt.Component
-import java.awt.Dimension
-import java.awt.FlowLayout
-import java.awt.Graphics
-import java.awt.Graphics2D
-import java.awt.RenderingHints
+import java.awt.*
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
-import javax.swing.DefaultListCellRenderer
-import javax.swing.JButton
-import javax.swing.JComboBox
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JList
-import javax.swing.JPanel
-import javax.swing.ListCellRenderer
-import javax.swing.SwingConstants
-import javax.swing.UIManager
+import javax.swing.*
 
 class ReviewToolWindowPanel(
     private val project: Project,
@@ -212,7 +196,9 @@ class ReviewToolWindowPanel(
 
     private fun deleteChangedFile(changedFile: ChangedFile) {
         val review = manager.getCurrentReview() ?: return
-        val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(Path.of(review.repositoryRoot, changedFile.filePath)) ?: return
+        val virtualFile =
+            LocalFileSystem.getInstance().findFileByNioFile(Path.of(review.repositoryRoot, changedFile.filePath))
+                ?: return
         val psiFile = PsiManager.getInstance(project).findFile(virtualFile) ?: return
         DeleteHandler.deletePsiElement(arrayOf(psiFile), project)
     }
@@ -231,7 +217,11 @@ class ReviewToolWindowPanel(
                 changedFilesByReviewId[review.id] = changedFiles
                 manager.syncSeenFiles(review.id, changedFiles, notify = false)
                 if (requestId == changedFilesLoadSequence.get() && manager.currentReviewId == review.id) {
-                    changedFilesPanel.setReviewFiles(changedFiles, manager.currentFilePath, manager.seenFileKeys(review.id))
+                    changedFilesPanel.setReviewFiles(
+                        changedFiles,
+                        manager.currentFilePath,
+                        manager.seenFileKeys(review.id)
+                    )
                     refreshDiff()
                 }
             }
@@ -270,7 +260,9 @@ class ReviewToolWindowPanel(
         val primaryActions = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
             isOpaque = false
             add(createReviewButton)
-            add(RoundedToolbarButton("Copy Prompt").applyToolbarActionStyle().apply { addActionListener { copyPrompt() } })
+            add(
+                RoundedToolbarButton("Copy Prompt").applyToolbarActionStyle()
+                    .apply { addActionListener { copyPrompt() } })
         }
 
         val rightSide = JPanel(BorderLayout(12, 0)).apply {
@@ -513,8 +505,10 @@ private class ReviewSelectorRenderer : ListCellRenderer<Review> {
         val component = delegate.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
         if (component is JLabel) {
             component.text = value?.let {
-                val openCount = it.comments.count { comment -> comment.status == dev.fatihdogmus.agenticreview.model.CommentStatus.OPEN }
-                val resolvedCount = it.comments.count { comment -> comment.status != dev.fatihdogmus.agenticreview.model.CommentStatus.OPEN }
+                val openCount =
+                    it.comments.count { comment -> comment.status == dev.fatihdogmus.agenticreview.model.CommentStatus.OPEN }
+                val resolvedCount =
+                    it.comments.count { comment -> comment.status != dev.fatihdogmus.agenticreview.model.CommentStatus.OPEN }
                 val countText = listOfNotNull(
                     openCount.takeIf { count -> count > 0 }?.let { count -> "$count Open" },
                     resolvedCount.takeIf { count -> count > 0 }?.let { count -> "$count Resolved" },

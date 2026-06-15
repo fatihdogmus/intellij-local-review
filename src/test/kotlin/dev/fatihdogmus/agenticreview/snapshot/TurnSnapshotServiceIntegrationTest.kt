@@ -4,16 +4,15 @@ import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import dev.fatihdogmus.agenticreview.testutil.runGit
-import dev.fatihdogmus.agenticreview.testutil.write
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 @TestApplication
 class TurnSnapshotServiceIntegrationTest {

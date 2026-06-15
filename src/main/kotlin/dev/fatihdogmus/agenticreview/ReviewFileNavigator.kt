@@ -18,7 +18,10 @@ object ReviewFileNavigator {
         OpenFileDescriptor(project, virtualFile).navigate(true)
         val context = FileSelectInContext(project, virtualFile)
         SelectInManager.getInstance(project).targetList
-            .firstOrNull { it.toolWindowId == ToolWindowId.PROJECT_VIEW && ApplicationManager.getApplication().runReadAction<Boolean> { it.canSelect(context) } }
+            .firstOrNull {
+                it.toolWindowId == ToolWindowId.PROJECT_VIEW && ApplicationManager.getApplication()
+                    .runReadAction<Boolean> { it.canSelect(context) }
+            }
             ?.selectIn(context, true)
     }
 }

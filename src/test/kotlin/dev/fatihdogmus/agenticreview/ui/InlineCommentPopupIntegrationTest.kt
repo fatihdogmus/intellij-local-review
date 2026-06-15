@@ -7,12 +7,12 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.ReviewManagerService
+import dev.fatihdogmus.agenticreview.diff.ReviewDiffRequestData
 import dev.fatihdogmus.agenticreview.model.DiffSide
 import dev.fatihdogmus.agenticreview.model.Review
 import dev.fatihdogmus.agenticreview.model.ReviewTarget
 import dev.fatihdogmus.agenticreview.model.ReviewTargetType
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
-import dev.fatihdogmus.agenticreview.diff.ReviewDiffRequestData
 import dev.fatihdogmus.agenticreview.testutil.findComponents
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
@@ -48,7 +48,9 @@ class InlineCommentPopupIntegrationTest {
                     .extracting("body")
                     .isEqualTo("Needs fix")
                 assertThat(editor.commentInlayComponents()).hasSize(1)
-                assertThat(findComponents(editor.commentInlayComponents().single()).filterIsInstance<JTextArea>().map { it.text })
+                assertThat(
+                    findComponents(editor.commentInlayComponents().single()).filterIsInstance<JTextArea>()
+                        .map { it.text })
                     .contains("Needs fix")
             } finally {
                 EditorFactory.getInstance().releaseEditor(editor)
@@ -61,7 +63,8 @@ class InlineCommentPopupIntegrationTest {
         val review = seededReview("resolve-dismiss")
         val changedFile = sampleChangedFile("src/Foo.kt")
         ReviewStateService.getInstance(project).addReview(review)
-        val comment = ReviewManagerService.getInstance(project).addComment(review.id, changedFile, DiffSide.RIGHT, 1, "todo")!!
+        val comment =
+            ReviewManagerService.getInstance(project).addComment(review.id, changedFile, DiffSide.RIGHT, 1, "todo")!!
         var dismissCount = 0
 
         assertThat(resolveCommentAndDismiss(project, comment.id) { dismissCount++ }).isTrue()
@@ -77,7 +80,8 @@ class InlineCommentPopupIntegrationTest {
         val review = seededReview("delete-dismiss")
         val changedFile = sampleChangedFile("src/Foo.kt")
         ReviewStateService.getInstance(project).addReview(review)
-        val comment = ReviewManagerService.getInstance(project).addComment(review.id, changedFile, DiffSide.RIGHT, 1, "todo")!!
+        val comment =
+            ReviewManagerService.getInstance(project).addComment(review.id, changedFile, DiffSide.RIGHT, 1, "todo")!!
         var dismissCount = 0
 
         assertThat(deleteCommentAndDismiss(project, comment.id) { dismissCount++ }).isTrue()

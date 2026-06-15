@@ -1,37 +1,22 @@
 package dev.fatihdogmus.agenticreview
 
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.ChangeListListener
-import dev.fatihdogmus.agenticreview.editor.ReviewPageManager
+import com.intellij.openapi.vcs.changes.ChangeListManager
 import dev.fatihdogmus.agenticreview.diff.DiffContextExtractor
+import dev.fatihdogmus.agenticreview.editor.ReviewPageManager
 import dev.fatihdogmus.agenticreview.export.AgentPromptBuilder
-import dev.fatihdogmus.agenticreview.model.AgentMetadata
-import dev.fatihdogmus.agenticreview.model.CommentStatus
-import dev.fatihdogmus.agenticreview.model.DiffSide
-import dev.fatihdogmus.agenticreview.model.Review
-import dev.fatihdogmus.agenticreview.model.ReviewComment
-import dev.fatihdogmus.agenticreview.model.SeenFileState
-import dev.fatihdogmus.agenticreview.model.ReviewStatus
-import dev.fatihdogmus.agenticreview.model.ReviewTarget
-import dev.fatihdogmus.agenticreview.model.ReviewTargetType
-import dev.fatihdogmus.agenticreview.model.commitHashIfAny
+import dev.fatihdogmus.agenticreview.model.*
 import dev.fatihdogmus.agenticreview.persistence.ReviewLoadResult
 import dev.fatihdogmus.agenticreview.persistence.ReviewSavePlan
 import dev.fatihdogmus.agenticreview.persistence.ReviewStateService
 import dev.fatihdogmus.agenticreview.persistence.SavedReviewArchive
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.util.nowIso
-import dev.fatihdogmus.agenticreview.vcs.ChangedFile
-import dev.fatihdogmus.agenticreview.vcs.BranchReviewMetadata
-import dev.fatihdogmus.agenticreview.vcs.CommitChangesProvider
-import dev.fatihdogmus.agenticreview.vcs.GitCommandFallback
-import dev.fatihdogmus.agenticreview.vcs.GitRepositoryResolver
-import dev.fatihdogmus.agenticreview.vcs.seenKey
-import dev.fatihdogmus.agenticreview.vcs.UncommittedChangesProvider
+import dev.fatihdogmus.agenticreview.vcs.*
 import git4idea.repo.GitRepositoryManager
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -41,7 +26,7 @@ import org.valiktor.functions.isNotNull
 import org.valiktor.validate
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.UUID
+import java.util.*
 
 @Service(Service.Level.PROJECT)
 class ReviewManagerService(private val project: Project) : Disposable {
@@ -50,12 +35,20 @@ class ReviewManagerService(private val project: Project) : Disposable {
     private val diffContextExtractor = DiffContextExtractor()
     private val listeners = mutableSetOf<() -> Unit>()
     private val archiveJson = Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }
-    internal var uncommittedChangesLoader: () -> List<ChangedFile> = { UncommittedChangesProvider(project).getChangedFiles() }
+    internal var uncommittedChangesLoader: () -> List<ChangedFile> =
+        { UncommittedChangesProvider(project).getChangedFiles() }
     internal var repositoryRootResolver: () -> String = { GitRepositoryResolver(project).resolveRepositoryRoot() }
-    internal var canCreateBranchReviewSupplier: () -> Boolean = { CommitChangesProvider(project).canCreateCurrentBranchReview() }
-    internal var branchReviewMetadataProvider: () -> BranchReviewMetadata? = { CommitChangesProvider(project).getCurrentBranchReviewMetadataOrNull() }
+    internal var canCreateBranchReviewSupplier: () -> Boolean =
+        { CommitChangesProvider(project).canCreateCurrentBranchReview() }
+    internal var branchReviewMetadataProvider: () -> BranchReviewMetadata? =
+        { CommitChangesProvider(project).getCurrentBranchReviewMetadataOrNull() }
     internal var isCommitReachableOnCurrentBranchSupplier: (String) -> Boolean = { commitHash ->
-        GitCommandFallback(repositoryRootResolver()).runOrNull("merge-base", "--is-ancestor", commitHash, "HEAD") != null
+        GitCommandFallback(repositoryRootResolver()).runOrNull(
+            "merge-base",
+            "--is-ancestor",
+            commitHash,
+            "HEAD"
+        ) != null
     }
     internal var currentHeadHashSupplier: () -> String? = {
         GitRepositoryManager.getInstance(project).repositories.firstOrNull()?.currentRevision
@@ -281,7 +274,11 @@ class ReviewManagerService(private val project: Project) : Disposable {
         ReviewTargetType.UNCOMMITTED -> {
             currentUncommittedChanges()
         }
-        ReviewTargetType.COMMIT -> CommitChangesProvider(project).getChangedFiles(review.target.commitHash ?: error("Commit hash missing"))
+
+        ReviewTargetType.COMMIT -> CommitChangesProvider(project).getChangedFiles(
+            review.target.commitHash ?: error("Commit hash missing")
+        )
+
         ReviewTargetType.COMMIT_RANGE -> CommitChangesProvider(project).getChangedFilesForRange(
             review.target.baseRef ?: error("Base ref missing"),
             review.target.headRef ?: error("Head ref missing"),
@@ -334,7 +331,12 @@ class ReviewManagerService(private val project: Project) : Disposable {
         return false
     }
 
-    fun markCommentResolved(commentId: String, message: String? = null, agentName: String? = null, runId: String? = null): Boolean {
+    fun markCommentResolved(
+        commentId: String,
+        message: String? = null,
+        agentName: String? = null,
+        runId: String? = null
+    ): Boolean {
         val (_, comment) = findComment(commentId) ?: return false
         comment.agentMetadata = if (message != null || agentName != null || runId != null) {
             AgentMetadata(
@@ -474,11 +476,13 @@ class ReviewManagerService(private val project: Project) : Disposable {
         return true
     }
 
-    private fun findUncommittedReview(): Review? = stateService.reviews().firstOrNull { it.target.type == ReviewTargetType.UNCOMMITTED }
+    private fun findUncommittedReview(): Review? =
+        stateService.reviews().firstOrNull { it.target.type == ReviewTargetType.UNCOMMITTED }
 
     private fun hasUncommittedChanges(): Boolean = hasUncommittedChangesSupplier()
 
-    private fun currentUncommittedChanges(): List<ChangedFile> = runCatching { uncommittedChangesLoader() }.getOrElse { emptyList() }
+    private fun currentUncommittedChanges(): List<ChangedFile> =
+        runCatching { uncommittedChangesLoader() }.getOrElse { emptyList() }
 
     private fun reviewArchivePath(review: Review): Path =
         Path.of(review.repositoryRoot, ".agentic-review", "${review.title.toKebabCase()}-${review.id}.json")
@@ -551,12 +555,14 @@ private fun SavedReviewArchive.toReviewTarget(): ReviewTarget = when (targetType
         parentHash = beginCommit,
         subject = subject,
     )
+
     ReviewTargetType.COMMIT_RANGE -> ReviewTarget(
         type = ReviewTargetType.COMMIT_RANGE,
         baseRef = beginCommit,
         headRef = endCommit,
         subject = subject,
     )
+
     ReviewTargetType.UNCOMMITTED -> ReviewTarget(type = ReviewTargetType.UNCOMMITTED)
 }
 
@@ -594,10 +600,12 @@ private fun SavedReviewArchive.validatedForImport(): SavedReviewArchive {
             validate(SavedReviewArchive::beginCommit).isNotNull()
             validate(SavedReviewArchive::endCommit).isNotNull()
         }
+
         ReviewTargetType.COMMIT_RANGE -> validate(this) {
             validate(SavedReviewArchive::beginCommit).isNotNull()
             validate(SavedReviewArchive::endCommit).isNotNull()
         }
+
         ReviewTargetType.UNCOMMITTED -> throw MalformedImportedReviewException()
     }
     return this

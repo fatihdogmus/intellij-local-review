@@ -1,13 +1,13 @@
 package dev.fatihdogmus.agenticreview.actions
 
-import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.DumbAwareAction
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.ui.ChangesViewContentManager
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.util.containers.ContainerUtil
@@ -16,9 +16,9 @@ import com.intellij.vcs.log.VcsLogDataKeys
 import dev.fatihdogmus.agenticreview.ReviewFileNavigator
 import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.diff.REVIEW_DIFF_EDITOR_KEY
+import dev.fatihdogmus.agenticreview.ui.AddCommentDialog
 import dev.fatihdogmus.agenticreview.ui.showInlineCommentForm
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
-import dev.fatihdogmus.agenticreview.ui.AddCommentDialog
 
 class StartReviewFromGitLogAction : DumbAwareAction() {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
@@ -90,14 +90,19 @@ class OpenReviewedFileAction : DumbAwareAction() {
         val project = event.project ?: return
         val editor = event.getData(CommonDataKeys.EDITOR) as? EditorEx ?: return
         val requestData = editor.getUserData(REVIEW_DIFF_EDITOR_KEY) ?: return
-        ReviewFileNavigator.openChangedFile(project, ReviewManagerService.getInstance(project).findReview(requestData.reviewId)?.repositoryRoot ?: return, requestData.changedFile)
+        ReviewFileNavigator.openChangedFile(
+            project,
+            ReviewManagerService.getInstance(project).findReview(requestData.reviewId)?.repositoryRoot ?: return,
+            requestData.changedFile
+        )
     }
 
     override fun update(event: AnActionEvent) {
         val project = event.project
         val editor = event.getData(CommonDataKeys.EDITOR) as? EditorEx
         val requestData = editor?.getUserData(REVIEW_DIFF_EDITOR_KEY)
-        event.presentation.isEnabledAndVisible = project != null && requestData != null && requestData.changedFile.status != ChangedFileStatus.DELETED
+        event.presentation.isEnabledAndVisible =
+            project != null && requestData != null && requestData.changedFile.status != ChangedFileStatus.DELETED
     }
 }
 

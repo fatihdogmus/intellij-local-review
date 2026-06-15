@@ -22,7 +22,11 @@ import java.nio.file.Path
 class DiffRequestBuilder(private val project: Project) {
     fun buildForFile(reviewId: String, changedFile: ChangedFile, repositoryRoot: String): DiffRequest {
         val change = Change(
-            createRevision(repositoryRoot, changedFile.beforeContent, changedFile.previousFilePath ?: changedFile.filePath),
+            createRevision(
+                repositoryRoot,
+                changedFile.beforeContent,
+                changedFile.previousFilePath ?: changedFile.filePath
+            ),
             createRevision(repositoryRoot, changedFile.afterContent, changedFile.filePath),
             changedFile.status.toFileStatus(),
         )
@@ -41,9 +45,14 @@ class DiffRequestBuilder(private val project: Project) {
         }
     }
 
-    private fun createRevision(repositoryRoot: String, content: ReviewContent?, fallbackPath: String): ContentRevision? {
+    private fun createRevision(
+        repositoryRoot: String,
+        content: ReviewContent?,
+        fallbackPath: String
+    ): ContentRevision? {
         if (content == null) return null
-        val filePath = LocalFilePath(Path.of(repositoryRoot, content.filePath.ifBlank { fallbackPath }).toString(), false)
+        val filePath =
+            LocalFilePath(Path.of(repositoryRoot, content.filePath.ifBlank { fallbackPath }).toString(), false)
         if (content.isWorktreeRevision() && filePath.virtualFile != null) {
             return CurrentContentRevision.create(filePath)
         }
@@ -59,23 +68,27 @@ class DiffRequestBuilder(private val project: Project) {
         ChangedFileStatus.RENAMED,
         ChangedFileStatus.COPIED,
         ChangedFileStatus.UNKNOWN,
-        -> FileStatus.MODIFIED
+            -> FileStatus.MODIFIED
     }
 
     private fun fallbackRequest(changedFile: ChangedFile, repositoryRoot: String): DiffRequest {
         val factory = DiffContentFactory.getInstance()
         val beforeText = changedFile.beforeContent?.text.orEmpty()
         val afterText = changedFile.afterContent?.text.orEmpty()
-        val beforeTitle = changedFile.beforeContent?.let { "${it.revisionTitle}  ${it.filePath}" } ?: "Missing  ${changedFile.filePath}"
-        val afterTitle = changedFile.afterContent?.let { "${it.revisionTitle}  ${it.filePath}" } ?: "Missing  ${changedFile.filePath}"
+        val beforeTitle = changedFile.beforeContent?.let { "${it.revisionTitle}  ${it.filePath}" }
+            ?: "Missing  ${changedFile.filePath}"
+        val afterTitle = changedFile.afterContent?.let { "${it.revisionTitle}  ${it.filePath}" }
+            ?: "Missing  ${changedFile.filePath}"
 
         val beforePath = changedFile.beforeContent?.filePath ?: changedFile.previousFilePath ?: changedFile.filePath
         val afterPath = changedFile.afterContent?.filePath ?: changedFile.filePath
         val beforeFilePath = LocalFilePath(Path.of(repositoryRoot, beforePath).toString(), false)
         val afterFilePath = LocalFilePath(Path.of(repositoryRoot, afterPath).toString(), false)
 
-        val beforeContent = if (beforeText.isEmpty()) factory.createEmpty() else factory.create(project, beforeText, beforeFilePath)
-        val afterContent = if (afterText.isEmpty()) factory.createEmpty() else factory.create(project, afterText, afterFilePath)
+        val beforeContent =
+            if (beforeText.isEmpty()) factory.createEmpty() else factory.create(project, beforeText, beforeFilePath)
+        val afterContent =
+            if (afterText.isEmpty()) factory.createEmpty() else factory.create(project, afterText, afterFilePath)
         return SimpleDiffRequest(changedFile.filePath, beforeContent, afterContent, beforeTitle, afterTitle)
     }
 }

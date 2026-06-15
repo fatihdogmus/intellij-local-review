@@ -11,19 +11,8 @@ import com.intellij.mcpserver.noSuitableProjectError
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import dev.fatihdogmus.agenticreview.ReviewManagerService
-import dev.fatihdogmus.agenticreview.model.AgentMetadata
-import dev.fatihdogmus.agenticreview.model.CommentAnchor
-import dev.fatihdogmus.agenticreview.model.CommentStatus
-import dev.fatihdogmus.agenticreview.model.Review
-import dev.fatihdogmus.agenticreview.model.ReviewComment
-import dev.fatihdogmus.agenticreview.model.ReviewStatus
-import dev.fatihdogmus.agenticreview.model.ReviewTarget
-import dev.fatihdogmus.agenticreview.model.ReviewTargetType
-import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotListResult
-import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotResult
-import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
-import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotSummary
-import dev.fatihdogmus.agenticreview.snapshot.TurnToolCall
+import dev.fatihdogmus.agenticreview.model.*
+import dev.fatihdogmus.agenticreview.snapshot.*
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -61,7 +50,12 @@ class ReviewMcpToolset : McpToolset {
             review.comments
                 .asSequence()
                 .filter { includeResolved || it.status != CommentStatus.RESOLVED }
-                .sortedWith(compareBy({ it.filePath }, { it.anchor.newLine ?: it.anchor.oldLine ?: Int.MAX_VALUE }, { it.createdAt }))
+                .sortedWith(
+                    compareBy(
+                        { it.filePath },
+                        { it.anchor.newLine ?: it.anchor.oldLine ?: Int.MAX_VALUE },
+                        { it.createdAt })
+                )
                 .map(::toCommentSummary)
                 .toList()
         }
@@ -80,7 +74,12 @@ class ReviewMcpToolset : McpToolset {
         val comments = review.comments
             .asSequence()
             .filter { it.status == CommentStatus.OPEN }
-            .sortedWith(compareBy({ it.filePath }, { it.anchor.newLine ?: it.anchor.oldLine ?: Int.MAX_VALUE }, { it.createdAt }))
+            .sortedWith(
+                compareBy(
+                    { it.filePath },
+                    { it.anchor.newLine ?: it.anchor.oldLine ?: Int.MAX_VALUE },
+                    { it.createdAt })
+            )
             .map(::toCommentSummary)
             .toList()
         return json.encodeToString(CommentListResult(comments))
@@ -124,7 +123,13 @@ class ReviewMcpToolset : McpToolset {
             agentName = agentName?.takeIf { it.isNotBlank() } ?: defaultAgentName(),
             runId = runId,
         )
-        return json.encodeToString(MutationResult(ok = true, commentId = commentId, newStatus = CommentStatus.RESOLVED.name))
+        return json.encodeToString(
+            MutationResult(
+                ok = true,
+                commentId = commentId,
+                newStatus = CommentStatus.RESOLVED.name
+            )
+        )
     }
 
     @McpTool(name = "review_export")
@@ -198,7 +203,13 @@ class ReviewMcpToolset : McpToolset {
             toolCalls = toolCalls,
         )
         if (turn == null) {
-            return json.encodeToString(TurnSnapshotResult(ok = false, turnId = "", error = "No active turn found for session $sessionId"))
+            return json.encodeToString(
+                TurnSnapshotResult(
+                    ok = false,
+                    turnId = "",
+                    error = "No active turn found for session $sessionId"
+                )
+            )
         }
         return json.encodeToString(TurnSnapshotResult(ok = true, turnId = turn.id))
     }
@@ -252,6 +263,7 @@ class ReviewMcpToolset : McpToolset {
             "uncommitted" -> manager.listReviews()
                 .filter { it.target.type == ReviewTargetType.UNCOMMITTED }
                 .firstOrNull() ?: mcpFail("No uncommitted review found")
+
             else -> resolveSelectorReview(manager, resolvedSelector)
         }
     }
