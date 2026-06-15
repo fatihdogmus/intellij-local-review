@@ -47,7 +47,7 @@ class ReviewManagerServiceTest {
         val review = seededReview("multi-line-anchor")
         ReviewStateService.getInstance(project).addReview(review)
 
-        manager.addComment(
+        val createdComment = manager.addComment(
             review.id,
             sampleChangedFile("src/Foo.kt"),
             DiffSide.RIGHT,
@@ -58,6 +58,7 @@ class ReviewManagerServiceTest {
 
         val comment = manager.findReview(review.id)?.comments?.single()
         assertThat(comment).isNotNull
+        assertThat(createdComment).isSameAs(comment)
         assertThat(comment!!.body).isEqualTo("Need cleanup")
         assertThat(comment.anchor.newLine).isEqualTo(2)
         assertThat(comment.anchor.endNewLine).isEqualTo(3)
@@ -78,7 +79,7 @@ class ReviewManagerServiceTest {
         val fooComments = manager.commentsForFile(review.id, "src/Foo.kt")
         assertThat(fooComments).singleElement().extracting("body").isEqualTo("foo")
 
-        manager.deleteComment(fooComments.single().id)
+        assertThat(manager.deleteComment(fooComments.single().id)).isTrue()
 
         assertThat(manager.commentsForFile(review.id, "src/Foo.kt")).isEmpty()
         assertThat(manager.findReview(review.id)?.comments).hasSize(1)
@@ -595,7 +596,7 @@ class ReviewManagerServiceTest {
         manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 1, "todo")
         val commentId = manager.findReview(review.id)!!.comments.single().id
 
-        manager.markCommentResolved(commentId)
+        assertThat(manager.markCommentResolved(commentId)).isTrue()
 
         val comment = manager.findReview(review.id)!!.comments.single()
         assertThat(comment.status).isEqualTo(CommentStatus.RESOLVED)
@@ -610,7 +611,7 @@ class ReviewManagerServiceTest {
         manager.addComment(review.id, sampleChangedFile("src/Foo.kt"), DiffSide.RIGHT, 1, "todo")
         val commentId = manager.findReview(review.id)!!.comments.single().id
 
-        manager.markCommentResolved(commentId, message = "done", agentName = "opencode", runId = "run-1")
+        assertThat(manager.markCommentResolved(commentId, message = "done", agentName = "opencode", runId = "run-1")).isTrue()
 
         val comment = manager.findReview(review.id)!!.comments.single()
         assertThat(comment.status).isEqualTo(CommentStatus.RESOLVED)
@@ -659,7 +660,7 @@ class ReviewManagerServiceTest {
         val review = seededCommitReview("delete-missing-comment")
         ReviewStateService.getInstance(project).addReview(review)
 
-        manager.deleteComment("missing")
+        assertThat(manager.deleteComment("missing")).isFalse()
 
         assertThat(manager.findReview(review.id)?.comments).isEmpty()
     }

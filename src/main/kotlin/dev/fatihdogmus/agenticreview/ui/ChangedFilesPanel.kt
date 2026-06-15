@@ -1,24 +1,27 @@
 package dev.fatihdogmus.agenticreview.ui
 
-import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.IdeActions
-import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
+import com.intellij.openapi.actionSystem.IdeActions
+import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.project.DumbAwareAction
+import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.JBColor
-import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBList
+import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.SimpleTextAttributes
+import com.intellij.ui.treeStructure.Tree
+import com.intellij.util.PlatformIcons
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import com.intellij.util.ui.tree.TreeUtil
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshot
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
+import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
 import dev.fatihdogmus.agenticreview.vcs.seenKey
 import java.awt.BorderLayout
-import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.Font
@@ -26,21 +29,24 @@ import java.awt.event.MouseAdapter
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeFormatter
-import javax.swing.BorderFactory
-import javax.swing.BoxLayout
 import javax.swing.DefaultListCellRenderer
-import javax.swing.DefaultListModel
 import javax.swing.JComboBox
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.ListCellRenderer
+import javax.swing.JTree
 import javax.swing.UIManager
+import javax.swing.tree.DefaultMutableTreeNode
+import javax.swing.tree.DefaultTreeModel
+import javax.swing.tree.TreePath
+import javax.swing.tree.TreeSelectionModel
 
 class ChangedFilesPanel {
-    private val model = DefaultListModel<ChangedFile>()
-    private val list = JBList(model)
+    private val rootNode = DefaultMutableTreeNode(RootNode)
+    private val model = DefaultTreeModel(rootNode)
+    private val tree = Tree(model)
     private var updatingModel = false
     private var reviewFiles: List<ChangedFile> = emptyList()
     private var turnFilesById: Map<String, List<ChangedFile>> = emptyMap()
@@ -57,13 +63,15 @@ class ChangedFilesPanel {
     val component: JComponent = JBPanel<JBPanel<*>>(BorderLayout())
 
     init {
-        list.cellRenderer = ChangedFileCellRenderer { changedFile ->
+        tree.cellRenderer = ChangedFileTreeRenderer { changedFile ->
             if (selectedTurn() != null) null else changedFile.seenKey() !in seenFileKeys
         }
-        list.background = UIManager.getColor("List.background") ?: UIUtil.getListBackground()
-        list.selectionBackground = UIManager.getColor("List.selectionBackground") ?: UIUtil.getListSelectionBackground(true)
-        list.selectionForeground = UIManager.getColor("List.selectionForeground") ?: UIUtil.getListForeground(true, true)
-        list.border = JBUI.Borders.empty(8, 10)
+        tree.isRootVisible = false
+        tree.showsRootHandles = true
+        tree.emptyText.text = "No changed files"
+        tree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
+        tree.background = UIManager.getColor("Tree.background") ?: UIUtil.getTreeBackground()
+        tree.border = JBUI.Borders.empty(4, 6)
 
         turnCombo.renderer = TurnComboRenderer()
         turnCombo.addActionListener {
@@ -72,35 +80,35 @@ class ChangedFilesPanel {
             onTurnChanged?.invoke(selected)
         }
 
-        list.addListSelectionListener {
-            if (!it.valueIsAdjusting && !updatingModel) {
-                list.requestFocusInWindow()
-                onSelectionChanged?.invoke(list.selectedValue)
+        tree.addTreeSelectionListener {
+            if (!updatingModel) {
+                tree.requestFocusInWindow()
+                onSelectionChanged?.invoke(selectedFile())
             }
         }
-        list.addMouseListener(object : MouseAdapter() {
+        tree.addMouseListener(object : MouseAdapter() {
             override fun mousePressed(e: java.awt.event.MouseEvent) {
-                list.requestFocusInWindow()
+                tree.requestFocusInWindow()
             }
             override fun mouseClicked(e: java.awt.event.MouseEvent) {
-                list.requestFocusInWindow()
+                tree.requestFocusInWindow()
                 if (e.clickCount == 2) {
-                    list.selectedValue?.takeIf { it.status != ChangedFileStatus.DELETED }?.let { onOpenRequested?.invoke(it) }
+                    selectedFile()?.takeIf { it.status != ChangedFileStatus.DELETED }?.let { onOpenRequested?.invoke(it) }
                 }
             }
         })
         object : DumbAwareAction() {
             override fun actionPerformed(e: AnActionEvent) {
-                list.selectedValue?.takeIf { it.status != ChangedFileStatus.DELETED }?.let { onDeleteRequested?.invoke(it) }
+                selectedFile()?.takeIf { it.status != ChangedFileStatus.DELETED }?.let { onDeleteRequested?.invoke(it) }
             }
         }.registerCustomShortcutSet(ActionManager.getInstance().getAction(IdeActions.ACTION_DELETE).shortcutSet, component)
         component.preferredSize = Dimension(JBUI.scale(280), JBUI.scale(260))
         component.minimumSize = Dimension(JBUI.scale(220), JBUI.scale(180))
-        component.background = list.background
+        component.background = tree.background
         component.add(createHeader(), BorderLayout.NORTH)
-        component.add(JBScrollPane(list).apply {
+        component.add(JBScrollPane(tree).apply {
             border = JBUI.Borders.empty()
-            viewport.background = list.background
+            viewport.background = tree.background
         }, BorderLayout.CENTER)
     }
 
@@ -168,7 +176,7 @@ class ChangedFilesPanel {
         return "$started  $agent  $duration  $count files"
     }
 
-    fun selectedFile(): ChangedFile? = list.selectedValue
+    fun selectedFile(): ChangedFile? = selectedFileNode()?.file
 
     fun selectedTurn(): TurnSnapshot? = (turnCombo.selectedItem as? TurnComboItem)?.turn
 
@@ -191,7 +199,7 @@ class ChangedFilesPanel {
     }
 
     private fun refreshModel(autoSelectFirst: Boolean, notifySelection: Boolean) {
-        val previousSelectionPath = list.selectedValue?.filePath
+        val previousSelectionPath = selectedFile()?.filePath ?: selectedFilePath
         val turn = selectedTurn()
         val visibleFiles = turn?.let { turnFilesById[it.id].orEmpty() } ?: reviewFiles
 
@@ -200,24 +208,87 @@ class ChangedFilesPanel {
         val wasUpdatingModel = updatingModel
         updatingModel = true
         try {
-            model.removeAllElements()
-            visibleFiles.forEach(model::addElement)
+            rootNode.removeAllChildren()
+            val fileNodesByPath = buildTree(visibleFiles)
+            model.reload()
+            TreeUtil.expandAll(tree)
 
-            list.selectedIndex = when {
-                previousSelectionPath != null -> visibleFiles.indexOfFirst { it.filePath == previousSelectionPath }.coerceAtLeast(0)
-                autoSelectFirst && model.size() > 0 -> 0
-                else -> -1
+            val pathToSelect = when {
+                previousSelectionPath != null && previousSelectionPath in fileNodesByPath -> previousSelectionPath
+                autoSelectFirst -> visibleFiles.firstOrNull()?.filePath
+                else -> null
+            }
+            tree.selectionPath = pathToSelect?.let { TreePath(fileNodesByPath[it]?.path) }
+            if (tree.selectionPath == null) {
+                tree.clearSelection()
             }
         } finally {
             updatingModel = wasUpdatingModel
         }
 
         if (notifySelection) {
-            val currentSelectionPath = list.selectedValue?.filePath
+            val currentSelectionPath = selectedFile()?.filePath
             if (currentSelectionPath != previousSelectionPath || currentSelectionPath == null) {
-                onSelectionChanged?.invoke(list.selectedValue)
+                onSelectionChanged?.invoke(selectedFile())
             }
         }
+    }
+
+    private fun buildTree(files: List<ChangedFile>): Map<String, DefaultMutableTreeNode> {
+        val root = DirectoryBuilder("", "")
+        val fileNodes = mutableMapOf<String, DefaultMutableTreeNode>()
+
+        for (file in files.sortedBy { it.filePath }) {
+            val parts = file.filePath.split('/').filter { it.isNotBlank() }
+            var directory = root
+            var directoryPath = ""
+            for (part in parts.dropLast(1)) {
+                directoryPath = if (directoryPath.isEmpty()) part else "$directoryPath/$part"
+                directory = directory.children.getOrPut(part) {
+                    DirectoryBuilder(part, directoryPath)
+                }
+            }
+            directory.files.add(file)
+        }
+
+        appendDirectoryChildren(root, rootNode, fileNodes)
+        return fileNodes
+    }
+
+    private fun appendDirectoryChildren(
+        directory: DirectoryBuilder,
+        parentNode: DefaultMutableTreeNode,
+        fileNodes: MutableMap<String, DefaultMutableTreeNode>,
+    ) {
+        for (child in directory.children.values.sortedBy { it.name }) {
+            val compacted = compactDirectory(child)
+            val directoryNode = DefaultMutableTreeNode(DirectoryNode(compacted.name, compacted.path))
+            parentNode.add(directoryNode)
+            appendDirectoryChildren(compacted, directoryNode, fileNodes)
+        }
+
+        for (file in directory.files.sortedBy { it.filePath.substringAfterLast('/') }) {
+            val fileNode = DefaultMutableTreeNode(FileNode(file))
+            parentNode.add(fileNode)
+            fileNodes[file.filePath] = fileNode
+        }
+    }
+
+    private fun compactDirectory(directory: DirectoryBuilder): DirectoryBuilder {
+        var compacted = directory
+        while (compacted.files.isEmpty() && compacted.children.size == 1) {
+            val child = compacted.children.values.single()
+            compacted = DirectoryBuilder("${compacted.name}/${child.name}", child.path).apply {
+                children.putAll(child.children)
+                files.addAll(child.files)
+            }
+        }
+        return compacted
+    }
+
+    private fun selectedFileNode(): FileNode? {
+        val node = tree.selectionPath?.lastPathComponent as? DefaultMutableTreeNode ?: return null
+        return node.userObject as? FileNode
     }
 
     private data class TurnComboItem(
@@ -250,111 +321,68 @@ class ChangedFilesPanel {
     }
 }
 
-private class ChangedFileCellRenderer(
+private object RootNode
+
+private class DirectoryBuilder(
+    val name: String,
+    val path: String,
+) {
+    val children: MutableMap<String, DirectoryBuilder> = linkedMapOf()
+    val files: MutableList<ChangedFile> = mutableListOf()
+}
+
+private data class DirectoryNode(
+    val name: String,
+    val path: String,
+)
+
+private data class FileNode(
+    val file: ChangedFile,
+)
+
+private class ChangedFileTreeRenderer(
     private val unseenState: (ChangedFile) -> Boolean?,
-) : ListCellRenderer<ChangedFile> {
+) : ColoredTreeCellRenderer() {
     private val addedColor = JBColor(0x1A7F37, 0x3FB950)
     private val deletedColor = JBColor(0xCF222E, 0xF85149)
-    private val modifiedBadgeBg = JBColor(0xE9EEF8, 0x313A48)
-    private val addedBadgeBg = JBColor(0xE7F6EC, 0x243B2D)
-    private val deletedBadgeBg = JBColor(0xFBE9E7, 0x3A2525)
-    private val selectedRowBg = UIManager.getColor("List.selectionBackground") ?: JBColor(Color(0xDCEBFF), Color(0x2D, 0x4A, 0x73))
-    private val selectedRowBorder = UIManager.getColor("Component.focusColor") ?: JBColor(Color(0x9E, 0xBF, 0xEA), Color(0x4F, 0x78, 0xA8))
-    private val rowBorder = UIManager.getColor("Component.borderColor") ?: JBColor(Color(0xD8, 0xE3, 0xF2), Color(0x32, 0x39, 0x44))
-    private val title = JBLabel()
-    private val titleBaseFont = title.font
-    private val stats = JBLabel()
-    private val subtitle = JBLabel()
-    private val statusBadge = JBLabel().apply {
-        border = JBUI.Borders.empty(2, 6)
-        isOpaque = true
-    }
-    private val titleRow = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
-        isOpaque = false
-        add(title, BorderLayout.WEST)
-    }
-    private val content = JPanel().apply {
-        layout = BoxLayout(this, BoxLayout.Y_AXIS)
-        border = JBUI.Borders.empty(8)
-        add(statusBadge)
-        add(JPanel(BorderLayout()).apply {
-            isOpaque = false
-            border = JBUI.Borders.emptyTop(4)
-            add(titleRow, BorderLayout.WEST)
-            alignmentX = 0.0f
-        })
-        add(subtitle.apply {
-            border = JBUI.Borders.emptyTop(3)
-            alignmentX = 0.0f
-        })
-        add(stats.apply {
-            border = JBUI.Borders.emptyTop(4)
-            alignmentX = 0.0f
-        })
-    }
-    private val panel = JPanel(BorderLayout()).apply {
-        add(content, BorderLayout.CENTER)
-    }
 
-    init {
-        subtitle.foreground = JBColor(Color(0x4B, 0x63, 0x82), Color(0xF5, 0xF7, 0xFA))
-        stats.font = stats.font.deriveFont(stats.font.size2D - 1f)
-        subtitle.font = subtitle.font.deriveFont(subtitle.font.size2D - 1f)
-        statusBadge.foreground = JBColor(0x355070, 0xB7D1FF)
-    }
-
-    override fun getListCellRendererComponent(
-        list: JList<out ChangedFile>,
-        value: ChangedFile?,
-        index: Int,
-        isSelected: Boolean,
-        cellHasFocus: Boolean,
-    ): JComponent {
-        if (value == null) return panel
-
-        val bg = if (isSelected) list.selectionBackground else list.background
-        val fg = if (isSelected) list.selectionForeground else list.foreground
-
-        val fileType = FileTypeManager.getInstance().getFileTypeByFileName(value.filePath)
-        val unseen = unseenState(value)
-        title.icon = fileType.icon
-        title.text = if (unseen == true) "* ${value.filePath.substringAfterLast('/')}" else value.filePath.substringAfterLast('/')
-        title.font = titleBaseFont.deriveFont(if (unseen == true) Font.BOLD else Font.PLAIN)
-        title.foreground = fg
-        statusBadge.text = value.status.name
-        statusBadge.foreground = statusForeground(value, isSelected, fg)
-        statusBadge.background = if (isSelected) bg else statusBackground(value)
-
-        val lineStats = estimateLineStats(value)
-        stats.text = if (isSelected) {
-            "+${lineStats.added}  -${lineStats.deleted}"
-        } else {
-            "<html><span style='color:${colorHex(addedColor)}'>+${lineStats.added}</span>&nbsp;&nbsp;<span style='color:${colorHex(deletedColor)}'>-${lineStats.deleted}</span></html>"
+    override fun customizeCellRenderer(
+        tree: JTree,
+        value: Any?,
+        selected: Boolean,
+        expanded: Boolean,
+        leaf: Boolean,
+        row: Int,
+        hasFocus: Boolean,
+    ) {
+        val userObject = (value as? DefaultMutableTreeNode)?.userObject
+        when (userObject) {
+            is DirectoryNode -> renderDirectory(userObject)
+            is FileNode -> renderFile(userObject.file)
         }
-        stats.foreground = fg
-
-        subtitle.text = buildSubtitle(value)
-        subtitle.isVisible = subtitle.text.isNotBlank()
-
-        val rowBackground = if (isSelected) selectedRowBg else bg
-        panel.background = bg
-        content.background = rowBackground
-        title.background = rowBackground
-        subtitle.background = rowBackground
-        titleRow.background = rowBackground
-
-        panel.border = BorderFactory.createEmptyBorder(0, 0, 8, 0)
-        content.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(if (isSelected) selectedRowBorder else rowBorder, 1, true),
-            JBUI.Borders.empty(8),
-        )
-        return panel
     }
 
-    private fun buildSubtitle(value: ChangedFile): String {
-        value.previousFilePath?.let { return "$it -> ${value.filePath}" }
-        val path = value.filePath.substringBeforeLast('/', missingDelimiterValue = "")
-        return if (path.isBlank()) value.filePath else path
+    private fun renderDirectory(directory: DirectoryNode) {
+        icon = PlatformIcons.FOLDER_ICON
+        append(directory.name, SimpleTextAttributes.REGULAR_ATTRIBUTES)
+    }
+
+    private fun renderFile(file: ChangedFile) {
+        val fileType = FileTypeManager.getInstance().getFileTypeByFileName(file.filePath)
+        val unseen = unseenState(file)
+        val lineStats = estimateLineStats(file)
+        val textAttributes = if (unseen == true) SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES else SimpleTextAttributes.REGULAR_ATTRIBUTES
+        val name = file.filePath.substringAfterLast('/')
+
+        icon = fileType.icon
+        append(if (unseen == true) "* $name" else name, textAttributes)
+        append("  ${statusText(file.status)}", statusAttributes(file.status))
+        append("  +${lineStats.added}", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, addedColor))
+        append(" -${lineStats.deleted}", SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, deletedColor))
+
+        file.previousFilePath?.let {
+            append("  from ${it.substringAfterLast('/')}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        }
     }
 
     // Keep list rendering cheap on the EDT. This badge is only a summary, so we
@@ -387,21 +415,23 @@ private class ChangedFileCellRenderer(
     }
 
     private fun countLines(text: String): Int = if (text.isEmpty()) 0 else text.lines().size
-    private fun colorHex(color: Color): String = String.format("#%02x%02x%02x", color.red, color.green, color.blue)
 
-    private fun statusBackground(value: ChangedFile): JBColor = when (value.status) {
-        ChangedFileStatus.ADDED -> addedBadgeBg
-        ChangedFileStatus.DELETED -> deletedBadgeBg
-        else -> modifiedBadgeBg
+    private fun statusText(status: ChangedFileStatus): String = when (status) {
+        ChangedFileStatus.ADDED -> "A"
+        ChangedFileStatus.DELETED -> "D"
+        ChangedFileStatus.RENAMED -> "R"
+        ChangedFileStatus.COPIED -> "C"
+        ChangedFileStatus.MODIFIED -> "M"
+        ChangedFileStatus.UNKNOWN -> "?"
     }
 
-    private fun statusForeground(value: ChangedFile, isSelected: Boolean, selectedForeground: Color): Color {
-        if (isSelected) return selectedForeground
-        return when (value.status) {
+    private fun statusAttributes(status: ChangedFileStatus): SimpleTextAttributes {
+        val color = when (status) {
             ChangedFileStatus.ADDED -> JBColor(0x1A7F37, 0x7EE787)
             ChangedFileStatus.DELETED -> JBColor(0xB42318, 0xFF8E8A)
             else -> JBColor(0x355070, 0xB7D1FF)
         }
+        return SimpleTextAttributes(SimpleTextAttributes.STYLE_BOLD, color)
     }
 
     private data class LineStats(val added: Int, val deleted: Int)

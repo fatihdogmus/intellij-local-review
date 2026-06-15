@@ -295,8 +295,8 @@ class ReviewManagerService(private val project: Project) : Disposable {
         lineNumber: Int,
         body: String,
         endLineNumber: Int? = null,
-    ) {
-        val review = findReview(reviewId) ?: return
+    ): ReviewComment? {
+        val review = findReview(reviewId) ?: return null
         val comment = ReviewComment(
             id = UUID.randomUUID().toString(),
             reviewId = reviewId,
@@ -315,6 +315,7 @@ class ReviewManagerService(private val project: Project) : Disposable {
         )
         review.comments.add(comment)
         touch(review)
+        return comment
     }
 
     fun updateComment(commentId: String, body: String) {
@@ -324,15 +325,17 @@ class ReviewManagerService(private val project: Project) : Disposable {
         touch(review)
     }
 
-    fun deleteComment(commentId: String) {
-        val (review, comment) = findComment(commentId) ?: return
+    fun deleteComment(commentId: String): Boolean {
+        val (review, comment) = findComment(commentId) ?: return false
         if (review.comments.remove(comment)) {
             touch(review)
+            return true
         }
+        return false
     }
 
-    fun markCommentResolved(commentId: String, message: String? = null, agentName: String? = null, runId: String? = null) {
-        val (_, comment) = findComment(commentId) ?: return
+    fun markCommentResolved(commentId: String, message: String? = null, agentName: String? = null, runId: String? = null): Boolean {
+        val (_, comment) = findComment(commentId) ?: return false
         comment.agentMetadata = if (message != null || agentName != null || runId != null) {
             AgentMetadata(
                 addressedBy = agentName,
@@ -343,7 +346,7 @@ class ReviewManagerService(private val project: Project) : Disposable {
         } else {
             comment.agentMetadata
         }
-        setCommentStatus(commentId, CommentStatus.RESOLVED)
+        return setCommentStatus(commentId, CommentStatus.RESOLVED)
     }
 
     fun commentsForFile(reviewId: String, filePath: String): List<ReviewComment> =
@@ -414,11 +417,12 @@ class ReviewManagerService(private val project: Project) : Disposable {
         }
     }
 
-    private fun setCommentStatus(commentId: String, status: CommentStatus) {
-        val (review, comment) = findComment(commentId) ?: return
+    private fun setCommentStatus(commentId: String, status: CommentStatus): Boolean {
+        val (review, comment) = findComment(commentId) ?: return false
         comment.status = status
         comment.updatedAt = nowIso()
         touch(review)
+        return true
     }
 
     internal fun syncUncommittedReviewState(notify: Boolean = true): Boolean {

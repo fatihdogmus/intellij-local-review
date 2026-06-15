@@ -27,9 +27,11 @@ import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Graphics
 import java.awt.Graphics2D
+import java.awt.GraphicsEnvironment
 import java.awt.Insets
 import java.awt.RenderingHints
 import java.awt.event.ActionEvent
+import java.awt.event.InputEvent
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.awt.event.KeyEvent
@@ -66,10 +68,7 @@ fun showReviewCommentInlays(
     return manager.commentsForFile(requestData.reviewId, requestData.changedFile.filePath)
         .mapNotNull { comment ->
             val line = (comment.anchor.newLine ?: comment.anchor.oldLine)?.minus(1) ?: return@mapNotNull null
-            val panel = ExistingCommentPanel(project, editor, comment)
-            val inlay = insertInlineComponent(editor, line, panel)
-            panel.inlayRef = inlay
-            inlay
+            showExistingCommentInlay(project, editor, comment, line)
         }
 }
 
@@ -169,7 +168,7 @@ private class InlineCommentFormPanel(
             addActionListener {
                 val body = textArea.text.trim()
                 if (body.isNotEmpty() && body != PLACEHOLDER_TEXT) {
-                    ReviewManagerService.getInstance(project).addComment(
+                    val comment = ReviewManagerService.getInstance(project).addComment(
                         requestData.reviewId,
                         requestData.changedFile,
                         requestData.commentSide,
@@ -177,8 +176,13 @@ private class InlineCommentFormPanel(
                         body,
                         endLineNumber = endLine?.let { it + 1 },
                     )
+                    dismiss()
+                    if (comment != null) {
+                        showExistingCommentInlay(project, editor, comment, startLine)
+                    }
+                } else {
+                    dismiss()
                 }
-                dismiss()
             }
         }
         installSubmitShortcut(textArea) { commentButton.doClick() }
@@ -205,6 +209,18 @@ private class InlineCommentFormPanel(
     private fun dismiss() {
         inlayRef?.let { Disposer.dispose(it) }
     }
+}
+
+private fun showExistingCommentInlay(
+    project: Project,
+    editor: EditorEx,
+    comment: ReviewComment,
+    line: Int,
+): Inlay<*>? {
+    val panel = ExistingCommentPanel(project, editor, comment)
+    val inlay = insertInlineComponent(editor, line, panel)
+    panel.inlayRef = inlay
+    return inlay
 }
 
 private class ExistingCommentPanel(
@@ -251,12 +267,12 @@ private class ExistingCommentPanel(
                     })
                     add(object : AnAction("Resolve comment", null, IconUtil.colorize(AllIcons.Actions.Checked, BLUE_BORDER, false, false)) {
                         override fun actionPerformed(e: AnActionEvent) {
-                            ReviewManagerService.getInstance(project).markCommentResolved(comment.id)
+                            resolveCommentAndDismiss(project, comment.id, ::dismiss)
                         }
                     })
                     add(object : AnAction("Delete comment", null, IconUtil.colorize(AllIcons.General.Remove, DELETE_RED, false, false)) {
                         override fun actionPerformed(e: AnActionEvent) {
-                            ReviewManagerService.getInstance(project).deleteComment(comment.id)
+                            deleteCommentAndDismiss(project, comment.id, ::dismiss)
                         }
                     })
                 }
@@ -337,6 +353,11 @@ private class ExistingCommentPanel(
         revalidate()
     }
 
+    private fun dismiss() {
+        inlayRef?.dispose()
+        inlayRef = null
+    }
+
     private fun stylePopupMenu(menu: JPopupMenu) {
         val defaultBg = UIManager.getColor("PopupMenu.background") ?: menu.background
         menu.subElements.mapNotNull { it.component as? JComponent }.forEach { component ->
@@ -384,6 +405,18 @@ private class RoundedLineBorder(
     }
 }
 
+internal fun resolveCommentAndDismiss(project: Project, commentId: String, dismiss: () -> Unit): Boolean {
+    val changed = ReviewManagerService.getInstance(project).markCommentResolved(commentId)
+    if (changed) dismiss()
+    return changed
+}
+
+internal fun deleteCommentAndDismiss(project: Project, commentId: String, dismiss: () -> Unit): Boolean {
+    val changed = ReviewManagerService.getInstance(project).deleteComment(commentId)
+    if (changed) dismiss()
+    return changed
+}
+
 private fun installSubmitShortcut(textArea: JBTextArea, submit: () -> Unit) {
     val actionKey = "localReview.submitComment"
     textArea.inputMap.put(commentSubmitKeyStroke(), actionKey)
@@ -396,5 +429,5 @@ private fun installSubmitShortcut(textArea: JBTextArea, submit: () -> Unit) {
 
 private fun commentSubmitKeyStroke(): KeyStroke = KeyStroke.getKeyStroke(
     KeyEvent.VK_ENTER,
-    Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx,
+    if (GraphicsEnvironment.isHeadless()) InputEvent.CTRL_DOWN_MASK else Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx,
 )

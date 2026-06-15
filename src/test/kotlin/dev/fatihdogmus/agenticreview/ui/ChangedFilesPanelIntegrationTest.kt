@@ -1,16 +1,13 @@
 package dev.fatihdogmus.agenticreview.ui
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.snapshot.TurnSnapshotService
-import dev.fatihdogmus.agenticreview.testutil.findLabel
-import dev.fatihdogmus.agenticreview.testutil.findComponents
-import dev.fatihdogmus.agenticreview.testutil.initGitRepo
-import dev.fatihdogmus.agenticreview.testutil.labels
-import dev.fatihdogmus.agenticreview.testutil.reviewList
 import dev.fatihdogmus.agenticreview.testutil.titleLabel
 import dev.fatihdogmus.agenticreview.testutil.turnCombo
 import dev.fatihdogmus.agenticreview.testutil.runGit
+import dev.fatihdogmus.agenticreview.testutil.reviewTree
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
 import dev.fatihdogmus.agenticreview.vcs.ReviewContent
@@ -20,8 +17,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
-import javax.swing.JComponent
-import javax.swing.JLabel
+import javax.swing.JTree
 
 @TestApplication
 class ChangedFilesPanelIntegrationTest {
@@ -34,60 +30,80 @@ class ChangedFilesPanelIntegrationTest {
 
     @Test
     fun setReviewFilesSelectsFirstFileAndTracksCurrentFiles() {
-        val panel = ChangedFilesPanel()
-        val files = listOf(sampleChangedFile("src/Foo.kt"), sampleChangedFile("src/Bar.kt"))
+        onEdt {
+            val panel = ChangedFilesPanel()
+            val files = listOf(sampleChangedFile("src/Foo.kt"), sampleChangedFile("src/Bar.kt"))
 
-        panel.setReviewFiles(files, selectedFilePath = null, seenFileKeys = emptySet())
+            panel.setReviewFiles(files, selectedFilePath = null, seenFileKeys = emptySet())
 
-        assertThat(panel.currentFiles()).containsExactlyElementsOf(files)
-        assertThat(panel.selectedFile()?.filePath).isEqualTo("src/Foo.kt")
+            assertThat(panel.currentFiles()).containsExactlyElementsOf(files)
+            assertThat(panel.selectedFile()?.filePath).isEqualTo("src/Foo.kt")
+        }
     }
 
     @Test
-    fun rendererMarksUnseenFilesWithAsteriskAndBoldTitle() {
-        val panel = ChangedFilesPanel()
-        val unseen = sampleChangedFile("src/Foo.kt")
-        val seen = sampleChangedFile("src/Bar.kt")
-        panel.setReviewFiles(listOf(unseen, seen), selectedFilePath = null, seenFileKeys = setOf(seen.seenKey()))
+    fun treeRendererMarksUnseenFilesWithAsterisk() {
+        onEdt {
+            val panel = ChangedFilesPanel()
+            val unseen = sampleChangedFile("src/Foo.kt")
+            val seen = sampleChangedFile("src/Bar.kt")
+            panel.setReviewFiles(listOf(unseen, seen), selectedFilePath = null, seenFileKeys = setOf(seen.seenKey()))
 
-        val list = reviewList(panel)
-        val renderer = list.cellRenderer
+            val rowTexts = treeRowTexts(reviewTree(panel))
 
-        val unseenComponent = renderer.getListCellRendererComponent(list, unseen, 0, false, false) as JComponent
-        val unseenLabel = findLabel(unseenComponent, "* Foo.kt")
-        assertThat(unseenLabel).isNotNull
-        assertThat(unseenLabel!!.font.isBold).isTrue()
-
-        val seenComponent = renderer.getListCellRendererComponent(list, seen, 1, false, false) as JComponent
-        val seenLabel = findLabel(seenComponent, "Bar.kt")
-        assertThat(seenLabel).isNotNull
-        assertThat(seenLabel!!.font.isBold).isFalse()
+            assertThat(rowTexts).anyMatch { it.contains("* Foo.kt") }
+            assertThat(rowTexts).anyMatch { it.contains("Bar.kt") && !it.contains("* Bar.kt") }
+        }
     }
 
     @Test
-    fun rendererShowsRenameSubtitleStatusAndLineStats() {
-        val panel = ChangedFilesPanel()
-        val list = reviewList(panel)
-        val renamed = ChangedFile(
-            filePath = "src/new/Foo.kt",
-            status = ChangedFileStatus.RENAMED,
-            beforeContent = ReviewContent("one\ntwo", "before", "src/old/Foo.kt"),
-            afterContent = ReviewContent("one\nthree\nfour", "after", "src/new/Foo.kt"),
-            previousFilePath = "src/old/Foo.kt",
-        )
-        panel.setReviewFiles(listOf(renamed), selectedFilePath = null, seenFileKeys = emptySet())
+    fun treeRendererShowsCompactRenameStatusAndLineStats() {
+        onEdt {
+            val panel = ChangedFilesPanel()
+            val renamed = ChangedFile(
+                filePath = "src/new/Foo.kt",
+                status = ChangedFileStatus.RENAMED,
+                beforeContent = ReviewContent("one\ntwo", "before", "src/old/Foo.kt"),
+                afterContent = ReviewContent("one\nthree\nfour", "after", "src/new/Foo.kt"),
+                previousFilePath = "src/old/Foo.kt",
+            )
+            panel.setReviewFiles(listOf(renamed), selectedFilePath = null, seenFileKeys = emptySet())
 
-        val component = list.cellRenderer.getListCellRendererComponent(list, renamed, 0, false, false) as JComponent
+            val rowTexts = treeRowTexts(reviewTree(panel))
+            val fileRow = rowTexts.single { it.contains("Foo.kt") }
 
-        assertThat(findLabel(component, "* Foo.kt")).isNotNull
-        assertThat(findLabel(component, "src/old/Foo.kt -> src/new/Foo.kt")).isNotNull
-        assertThat(findLabel(component, "RENAMED")).isNotNull
-        assertThat(labels(component).any { it.text.contains("+2") && it.text.contains("-1") }).isTrue()
+            assertThat(fileRow).contains("* Foo.kt")
+            assertThat(fileRow).contains("R")
+            assertThat(fileRow).contains("+2")
+            assertThat(fileRow).contains("-1")
+            assertThat(fileRow).contains("from Foo.kt")
+            assertThat(fileRow).doesNotContain("src/old/Foo.kt")
+            assertThat(fileRow).doesNotContain("src/new/Foo.kt")
+        }
+    }
+
+    @Test
+    fun treeCompactsSingleChildDirectoryChains() {
+        onEdt {
+            val panel = ChangedFilesPanel()
+            panel.setReviewFiles(
+                listOf(
+                    sampleChangedFile("src/main/kotlin/dev/fatihdogmus/Foo.kt"),
+                    sampleChangedFile("src/main/kotlin/dev/fatihdogmus/Bar.kt"),
+                ),
+                selectedFilePath = null,
+                seenFileKeys = emptySet(),
+            )
+
+            val rowTexts = treeRowTexts(reviewTree(panel))
+
+            assertThat(rowTexts.first()).isEqualTo("src/main/kotlin/dev/fatihdogmus")
+            assertThat(rowTexts).doesNotContain("src", "main", "kotlin", "dev")
+        }
     }
 
     @Test
     fun turnDropdownIsHiddenWhenTurnsDisabledAndVisibleWhenEnabled() {
-        val panel = ChangedFilesPanel()
         val turnService = TurnSnapshotService.getInstance(project)
         val repoRoot = Path.of(project.basePath!!)
         val file = repoRoot.resolve("src/Foo.kt")
@@ -97,19 +113,21 @@ class ChangedFilesPanelIntegrationTest {
         turnService.beginTurn("session-ui", "step-ui", project.basePath!!, null, null)
         turnService.endTurn("session-ui", "step-ui", "completed", listOf(file.toString()), emptyList())
 
-        panel.setTurnsEnabled(false)
-        panel.refreshTurns(turnService)
-        assertThat(turnCombo(panel).isVisible).isFalse()
+        onEdt {
+            val panel = ChangedFilesPanel()
+            panel.setTurnsEnabled(false)
+            panel.refreshTurns(turnService)
+            assertThat(turnCombo(panel).isVisible).isFalse()
 
-        panel.setTurnsEnabled(true)
-        panel.refreshTurns(turnService)
-        assertThat(turnCombo(panel).isVisible).isTrue()
-        assertThat(turnCombo(panel).itemCount).isEqualTo(2)
+            panel.setTurnsEnabled(true)
+            panel.refreshTurns(turnService)
+            assertThat(turnCombo(panel).isVisible).isTrue()
+            assertThat(turnCombo(panel).itemCount).isEqualTo(2)
+        }
     }
 
     @Test
     fun selectingTurnSwitchesToTurnChangedFilesMode() {
-        val panel = ChangedFilesPanel()
         val turnService = TurnSnapshotService.getInstance(project)
         val repoRoot = Path.of(project.basePath!!)
         val file = repoRoot.resolve("src/Foo.kt")
@@ -123,16 +141,20 @@ class ChangedFilesPanelIntegrationTest {
         runGit(repoRoot, "commit", "-m", "initial")
         Files.writeString(file, "after\n")
 
-        panel.setTurnsEnabled(true)
         turnService.beginTurn("session-mode", "step-mode", project.basePath!!, null, null)
         turnService.endTurn("session-mode", "step-mode", "completed", listOf(file.toString()), emptyList())
-        panel.refreshTurns(turnService)
 
-        turnCombo(panel).selectedIndex = 1
+        onEdt {
+            val panel = ChangedFilesPanel()
+            panel.setTurnsEnabled(true)
+            panel.refreshTurns(turnService)
 
-        assertThat(panel.currentFiles()).hasSize(1)
-        assertThat(panel.currentFiles().single().filePath).isEqualTo("src/Foo.kt")
-        assertThat(titleLabel(panel).text).isEqualTo("Turn Changed Files")
+            turnCombo(panel).selectedIndex = 1
+
+            assertThat(panel.currentFiles()).hasSize(1)
+            assertThat(panel.currentFiles().single().filePath).isEqualTo("src/Foo.kt")
+            assertThat(titleLabel(panel).text).isEqualTo("Turn Changed Files")
+        }
     }
 
     private fun sampleChangedFile(path: String): ChangedFile = ChangedFile(
@@ -141,4 +163,21 @@ class ChangedFilesPanelIntegrationTest {
         beforeContent = ReviewContent("before\n", "before", path),
         afterContent = ReviewContent("after\n", "after", path),
     )
+
+    private fun treeRowTexts(tree: JTree): List<String> = (0 until tree.rowCount).map { row ->
+        val path = tree.getPathForRow(row)
+        tree.cellRenderer.getTreeCellRendererComponent(
+            tree,
+            path.lastPathComponent,
+            false,
+            tree.isExpanded(path),
+            tree.model.isLeaf(path.lastPathComponent),
+            row,
+            false,
+        ).toString()
+    }
+
+    private fun onEdt(action: () -> Unit) {
+        ApplicationManager.getApplication().invokeAndWait(action)
+    }
 }

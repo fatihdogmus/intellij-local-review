@@ -14,7 +14,6 @@ import dev.fatihdogmus.agenticreview.vcs.GitCommandFallback
 import dev.fatihdogmus.agenticreview.vcs.GitRepositoryResolver
 import dev.fatihdogmus.agenticreview.vcs.ReviewContent
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
 import java.util.UUID

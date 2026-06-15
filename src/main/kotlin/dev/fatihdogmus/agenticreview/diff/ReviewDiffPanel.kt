@@ -4,6 +4,7 @@ import com.intellij.diff.DiffManager
 import com.intellij.diff.tools.util.base.TextDiffSettingsHolder.TextDiffSettings
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.WriteIntentReadAction
 import com.intellij.openapi.project.Project
 import javax.swing.JComponent
 
@@ -26,6 +27,8 @@ class ReviewDiffPanel(
         get() = requestPanel.component
 
     fun showDiff(request: DiffRequest) {
-        requestPanel.setRequest(request)
+        WriteIntentReadAction.run {
+            requestPanel.setRequest(request)
+        }
     }
 }

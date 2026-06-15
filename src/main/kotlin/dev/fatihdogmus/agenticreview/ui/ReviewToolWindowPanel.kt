@@ -170,7 +170,11 @@ class ReviewToolWindowPanel(
             val repositoryRoot = review?.repositoryRoot ?: project.basePath ?: ""
             val cacheKey = "$reviewId:${changedFile.seenKey()}"
             val request = diffRequestCache.getOrPut(cacheKey) {
-                diffRequestBuilder.buildForFile(reviewId, changedFile, repositoryRoot)
+                try {
+                    diffRequestBuilder.buildForFile(reviewId, changedFile, repositoryRoot)
+                } catch (e: Exception) {
+                    return@getOrPut MessageDiffRequest("Failed to build diff request: ${e.message}")
+                }
             }
             diffPanel.showDiff(request)
             if (manager.markFileSeen(reviewId, changedFile)) {

@@ -2,13 +2,12 @@ package dev.fatihdogmus.agenticreview.testutil
 
 import dev.fatihdogmus.agenticreview.ui.ChangedFilesPanel
 import dev.fatihdogmus.agenticreview.ui.ReviewToolWindowPanel
-import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import java.awt.Component
 import java.awt.Container
 import javax.swing.JComboBox
 import javax.swing.JComponent
 import javax.swing.JLabel
-import javax.swing.JList
+import javax.swing.JTree
 
 fun findComponents(root: Component): List<Component> = buildList {
     add(root)
@@ -29,9 +28,8 @@ fun findLabel(component: Component, text: String): JLabel? {
 
 fun labels(component: Component): List<JLabel> = findComponents(component).filterIsInstance<JLabel>()
 
-@Suppress("UNCHECKED_CAST")
-fun reviewList(panel: ChangedFilesPanel): JList<ChangedFile> =
-    findComponents(panel.component).filterIsInstance<JList<*>>().single() as JList<ChangedFile>
+fun reviewTree(panel: ChangedFilesPanel): JTree =
+    findComponents(panel.component).filterIsInstance<JTree>().single()
 
 fun turnCombo(panel: ChangedFilesPanel): JComboBox<*> =
     findComponents(panel.component)
