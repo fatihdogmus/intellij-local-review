@@ -1,7 +1,8 @@
 package dev.fatihdogmus.agenticreview.editor
 
-import com.intellij.openapi.fileEditor.FileEditor
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileEditorState
+import com.intellij.openapi.fileEditor.FileEditorWithTextEditors
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.UserDataHolderBase
 import dev.fatihdogmus.agenticreview.ui.ReviewToolWindowPanel
@@ -11,7 +12,7 @@ import javax.swing.JComponent
 class ReviewPageFileEditor(
     project: Project,
     private val file: ReviewPageVirtualFile,
-) : UserDataHolderBase(), FileEditor {
+) : UserDataHolderBase(), FileEditorWithTextEditors {
     private val panel = ReviewToolWindowPanel(project)
 
     override fun getComponent(): JComponent = panel
@@ -31,6 +32,8 @@ class ReviewPageFileEditor(
     override fun removePropertyChangeListener(listener: PropertyChangeListener) = Unit
 
     override fun getFile(): ReviewPageVirtualFile = file
+
+    override fun getEmbeddedEditors(): List<Editor> = panel.embeddedEditors
 
     override fun dispose() {
         panel.dispose()

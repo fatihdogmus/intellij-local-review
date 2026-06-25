@@ -6,18 +6,21 @@ import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.diff.util.Side
-import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.LocalFilePath
-import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.testFramework.LightVirtualFile
 import dev.fatihdogmus.agenticreview.model.DiffSide
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
 import dev.fatihdogmus.agenticreview.vcs.ReviewContent
 import java.nio.file.Path
 
 class DiffRequestBuilder(private val project: Project) {
-    fun buildForFile(reviewId: String, changedFile: ChangedFile, repositoryRoot: String): DiffRequest {
+    fun buildForFile(
+        reviewId: String,
+        changedFile: ChangedFile,
+        repositoryRoot: String,
+        onEditorsCreated: ((List<Editor>) -> Unit)? = null,
+    ): DiffRequest {
         val beforeContent = createContent(
             changedFile.beforeContent,
             repositoryRoot,
@@ -44,6 +47,7 @@ class DiffRequestBuilder(private val project: Project) {
                     reviewId = reviewId,
                     changedFile = changedFile,
                     commentSide = if (changedFile.afterContent != null) DiffSide.RIGHT else DiffSide.LEFT,
+                    onEditorsCreated = onEditorsCreated,
                 ),
             )
         }
@@ -58,18 +62,8 @@ class DiffRequestBuilder(private val project: Project) {
         val factory = DiffContentFactory.getInstance()
         val absolutePath = Path.of(repositoryRoot, revision.filePath.ifBlank { fallbackPath }).toString()
         val filePath = LocalFilePath(absolutePath, false)
-        val virtualFile: VirtualFile? = filePath.virtualFile
 
-        if (revision.isWorktreeRevision() && virtualFile != null) {
-            return factory.create(project, virtualFile)
-        }
-
-        val highlightFile: VirtualFile = virtualFile ?: LightVirtualFile(
-            filePath.name,
-            FileTypeManager.getInstance().getFileTypeByFileName(filePath.name),
-            revision.text,
-        )
-        return factory.create(project, revision.text, highlightFile)
+        return factory.create(project, revision.text, filePath)
     }
 
     private fun ReviewContent.isWorktreeRevision(): Boolean = revisionTitle.isBlank() || revisionTitle == "WORKTREE"

@@ -71,6 +71,8 @@ class ReviewDiffExtension : DiffExtension() {
             allEditors.forEach { installOpenFileShortcut(project, it, requestData) }
         }
 
+        requestData.onEditorsCreated?.invoke(allEditors)
+
         val renderer = CommentLineMarkerRenderer(project, commentEditor, requestData)
         val commentInlays = showReviewCommentInlays(project, commentEditor, requestData)
         val gutterHighlighter = commentEditor.markupModel.addRangeHighlighter(

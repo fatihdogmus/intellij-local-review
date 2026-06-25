@@ -1,5 +1,9 @@
 package dev.fatihdogmus.agenticreview.ui
 
+import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
+import com.intellij.codeInsight.multiverse.EditorContextManager
+import com.intellij.codeInsight.multiverse.SingleEditorContext
+import com.intellij.codeInsight.multiverse.codeInsightContext
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.requests.MessageDiffRequest
 import com.intellij.icons.AllIcons
@@ -14,11 +18,13 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAwareAction
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.ui.JBColor
 import com.intellij.ui.JBSplitter
@@ -49,6 +55,9 @@ class ReviewToolWindowPanel(
     private val manager = ReviewManagerService.getInstance(project)
     private val diffRequestBuilder = DiffRequestBuilder(project)
     private val diffPanel = ReviewDiffPanel(project, this)
+
+    val embeddedEditors: List<com.intellij.openapi.editor.Editor>
+        get() = diffPanel.embeddedEditors
     private val changedFilesPanel = ChangedFilesPanel()
     private val contentPanel = JPanel(BorderLayout())
     private val reviewSelector = JComboBox<Review>()
@@ -155,7 +164,15 @@ class ReviewToolWindowPanel(
             val cacheKey = "$reviewId:${changedFile.seenKey()}"
             val request = diffRequestCache.getOrPut(cacheKey) {
                 try {
-                    diffRequestBuilder.buildForFile(reviewId, changedFile, repositoryRoot)
+                    diffRequestBuilder.buildForFile(
+                        reviewId,
+                        changedFile,
+                        repositoryRoot,
+                        onEditorsCreated = { editors ->
+                            diffPanel.setEmbeddedEditors(editors)
+                            seedEmbeddedEditorContexts(editors)
+                        },
+                    )
                 } catch (e: Exception) {
                     return@getOrPut MessageDiffRequest("Failed to build diff request: ${e.message}")
                 }
@@ -188,9 +205,37 @@ class ReviewToolWindowPanel(
             val repositoryRoot = manager.getCurrentReview()?.repositoryRoot ?: project.basePath ?: ""
             val cacheKey = "${turn.id}:${matchedDiff.seenKey()}"
             val request = diffRequestCache.getOrPut(cacheKey) {
-                diffRequestBuilder.buildForFile(turn.id, matchedDiff, repositoryRoot)
+                diffRequestBuilder.buildForFile(
+                    turn.id,
+                    matchedDiff,
+                    repositoryRoot,
+                    onEditorsCreated = { editors ->
+                        diffPanel.setEmbeddedEditors(editors)
+                        seedEmbeddedEditorContexts(editors)
+                    },
+                )
             }
             diffPanel.showDiff(request)
+        }
+    }
+
+    private fun seedEmbeddedEditorContexts(editors: List<Editor>) {
+        val contextManager = EditorContextManager.getInstance(project)
+        val psiFilesToRestart = linkedSetOf<com.intellij.psi.PsiFile>()
+
+        for (editor in editors) {
+            if (contextManager.getCachedEditorContexts(editor) != null) continue
+
+            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: continue
+            contextManager.setEditorContextNoFire(editor, SingleEditorContext(psiFile.codeInsightContext))
+            psiFilesToRestart += psiFile
+        }
+
+        if (psiFilesToRestart.isEmpty()) return
+
+        val daemon = DaemonCodeAnalyzer.getInstance(project)
+        psiFilesToRestart.forEach { psiFile ->
+            daemon.restart(psiFile, "Seed diff editor context")
         }
     }
 
