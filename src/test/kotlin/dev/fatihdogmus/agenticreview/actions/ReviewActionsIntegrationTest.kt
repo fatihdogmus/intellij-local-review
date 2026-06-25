@@ -1,6 +1,7 @@
 package dev.fatihdogmus.agenticreview.actions
 
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.ActionUiKind
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.Presentation
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
@@ -136,11 +137,7 @@ class ReviewActionsIntegrationTest {
         val action = StartReviewFromGitLogAction()
 
         action.actionPerformed(
-            AnActionEvent.createFromDataContext(
-                "test",
-                Presentation(),
-                SimpleDataContext.EMPTY_CONTEXT
-            )
+            testEvent(SimpleDataContext.EMPTY_CONTEXT)
         )
         action.actionPerformed(projectEvent())
 
@@ -203,11 +200,7 @@ class ReviewActionsIntegrationTest {
     fun openReviewedFileActionPerformedReturnsEarlyWithoutProjectEditorOrRequestData() {
         val action = OpenReviewedFileAction()
         action.actionPerformed(
-            AnActionEvent.createFromDataContext(
-                "test",
-                Presentation(),
-                SimpleDataContext.EMPTY_CONTEXT
-            )
+            testEvent(SimpleDataContext.EMPTY_CONTEXT)
         )
 
         ApplicationManager.getApplication().invokeAndWait {
@@ -259,19 +252,22 @@ class ReviewActionsIntegrationTest {
 
     private fun projectEvent(): AnActionEvent {
         val dataContext = SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).build()
-        return AnActionEvent.createFromDataContext("test", Presentation(), dataContext)
+        return testEvent(dataContext)
     }
 
     private fun <T> eventWithData(key: com.intellij.openapi.actionSystem.DataKey<T>, value: T): AnActionEvent {
         val dataContext = SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).add(key, value).build()
-        return AnActionEvent.createFromDataContext("test", Presentation(), dataContext)
+        return testEvent(dataContext)
     }
 
     private fun eventWithEditor(editor: EditorEx): AnActionEvent {
         val dataContext =
             SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).add(CommonDataKeys.EDITOR, editor).build()
-        return AnActionEvent.createFromDataContext("test", Presentation(), dataContext)
+        return testEvent(dataContext)
     }
+
+    private fun testEvent(dataContext: com.intellij.openapi.actionSystem.DataContext): AnActionEvent =
+        AnActionEvent.createEvent(dataContext, Presentation(), "test", ActionUiKind.NONE, null)
 
     private fun fakeCommitSelection(withCommits: Boolean): VcsLogCommitSelection {
         return TestCommitSelection(

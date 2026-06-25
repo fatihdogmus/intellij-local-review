@@ -1,38 +1,42 @@
 package dev.fatihdogmus.agenticreview.diff
 
 import com.intellij.diff.DiffContentFactory
+import com.intellij.diff.contents.DiffContent
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.requests.SimpleDiffRequest
-import com.intellij.openapi.progress.EmptyProgressIndicator
+import com.intellij.diff.util.DiffUserDataKeys
+import com.intellij.diff.util.Side
+import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.UserDataHolderBase
-import com.intellij.openapi.vcs.FileStatus
 import com.intellij.openapi.vcs.LocalFilePath
-import com.intellij.openapi.vcs.changes.Change
-import com.intellij.openapi.vcs.changes.ContentRevision
-import com.intellij.openapi.vcs.changes.CurrentContentRevision
-import com.intellij.openapi.vcs.changes.SimpleContentRevision
-import com.intellij.openapi.vcs.changes.actions.diff.ChangeDiffRequestProducer
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.testFramework.LightVirtualFile
 import dev.fatihdogmus.agenticreview.model.DiffSide
 import dev.fatihdogmus.agenticreview.vcs.ChangedFile
-import dev.fatihdogmus.agenticreview.vcs.ChangedFileStatus
 import dev.fatihdogmus.agenticreview.vcs.ReviewContent
 import java.nio.file.Path
 
 class DiffRequestBuilder(private val project: Project) {
     fun buildForFile(reviewId: String, changedFile: ChangedFile, repositoryRoot: String): DiffRequest {
-        val change = Change(
-            createRevision(
-                repositoryRoot,
-                changedFile.beforeContent,
-                changedFile.previousFilePath ?: changedFile.filePath
-            ),
-            createRevision(repositoryRoot, changedFile.afterContent, changedFile.filePath),
-            changedFile.status.toFileStatus(),
+        val beforeContent = createContent(
+            changedFile.beforeContent,
+            repositoryRoot,
+            changedFile.previousFilePath ?: changedFile.filePath,
         )
-        val producer = ChangeDiffRequestProducer.create(project, change)
-        val request = producer?.process(UserDataHolderBase(), EmptyProgressIndicator())
-            ?: fallbackRequest(changedFile, repositoryRoot)
+        val afterContent = createContent(changedFile.afterContent, repositoryRoot, changedFile.filePath)
+
+        val beforeTitle = changedFile.beforeContent?.let { "${it.revisionTitle}  ${it.filePath}" }
+            ?: "Missing  ${changedFile.filePath}"
+        val afterTitle = changedFile.afterContent?.let { "${it.revisionTitle}  ${it.filePath}" }
+            ?: "Missing  ${changedFile.filePath}"
+
+        val request = SimpleDiffRequest(changedFile.filePath, beforeContent, afterContent, beforeTitle, afterTitle)
+
+        val beforeIsWorktree = changedFile.beforeContent?.isWorktreeRevision() == true
+        val afterIsWorktree = changedFile.afterContent?.isWorktreeRevision() == true
+        if (!beforeIsWorktree && afterIsWorktree) request.putUserData(DiffUserDataKeys.MASTER_SIDE, Side.RIGHT)
+        if (beforeIsWorktree && !afterIsWorktree) request.putUserData(DiffUserDataKeys.MASTER_SIDE, Side.LEFT)
+
         return request.apply {
             putUserData(
                 REVIEW_DIFF_REQUEST_DATA_KEY,
@@ -45,50 +49,28 @@ class DiffRequestBuilder(private val project: Project) {
         }
     }
 
-    private fun createRevision(
+    private fun createContent(
+        revision: ReviewContent?,
         repositoryRoot: String,
-        content: ReviewContent?,
-        fallbackPath: String
-    ): ContentRevision? {
-        if (content == null) return null
-        val filePath =
-            LocalFilePath(Path.of(repositoryRoot, content.filePath.ifBlank { fallbackPath }).toString(), false)
-        if (content.isWorktreeRevision() && filePath.virtualFile != null) {
-            return CurrentContentRevision.create(filePath)
+        fallbackPath: String,
+    ): DiffContent {
+        if (revision == null) return DiffContentFactory.getInstance().createEmpty()
+        val factory = DiffContentFactory.getInstance()
+        val absolutePath = Path.of(repositoryRoot, revision.filePath.ifBlank { fallbackPath }).toString()
+        val filePath = LocalFilePath(absolutePath, false)
+        val virtualFile: VirtualFile? = filePath.virtualFile
+
+        if (revision.isWorktreeRevision() && virtualFile != null) {
+            return factory.create(project, virtualFile)
         }
-        return SimpleContentRevision(content.text, filePath, content.revisionTitle)
+
+        val highlightFile: VirtualFile = virtualFile ?: LightVirtualFile(
+            filePath.name,
+            FileTypeManager.getInstance().getFileTypeByFileName(filePath.name),
+            revision.text,
+        )
+        return factory.create(project, revision.text, highlightFile)
     }
 
     private fun ReviewContent.isWorktreeRevision(): Boolean = revisionTitle.isBlank() || revisionTitle == "WORKTREE"
-
-    private fun ChangedFileStatus.toFileStatus(): FileStatus = when (this) {
-        ChangedFileStatus.ADDED -> FileStatus.ADDED
-        ChangedFileStatus.DELETED -> FileStatus.DELETED
-        ChangedFileStatus.MODIFIED,
-        ChangedFileStatus.RENAMED,
-        ChangedFileStatus.COPIED,
-        ChangedFileStatus.UNKNOWN,
-            -> FileStatus.MODIFIED
-    }
-
-    private fun fallbackRequest(changedFile: ChangedFile, repositoryRoot: String): DiffRequest {
-        val factory = DiffContentFactory.getInstance()
-        val beforeText = changedFile.beforeContent?.text.orEmpty()
-        val afterText = changedFile.afterContent?.text.orEmpty()
-        val beforeTitle = changedFile.beforeContent?.let { "${it.revisionTitle}  ${it.filePath}" }
-            ?: "Missing  ${changedFile.filePath}"
-        val afterTitle = changedFile.afterContent?.let { "${it.revisionTitle}  ${it.filePath}" }
-            ?: "Missing  ${changedFile.filePath}"
-
-        val beforePath = changedFile.beforeContent?.filePath ?: changedFile.previousFilePath ?: changedFile.filePath
-        val afterPath = changedFile.afterContent?.filePath ?: changedFile.filePath
-        val beforeFilePath = LocalFilePath(Path.of(repositoryRoot, beforePath).toString(), false)
-        val afterFilePath = LocalFilePath(Path.of(repositoryRoot, afterPath).toString(), false)
-
-        val beforeContent =
-            if (beforeText.isEmpty()) factory.createEmpty() else factory.create(project, beforeText, beforeFilePath)
-        val afterContent =
-            if (afterText.isEmpty()) factory.createEmpty() else factory.create(project, afterText, afterFilePath)
-        return SimpleDiffRequest(changedFile.filePath, beforeContent, afterContent, beforeTitle, afterTitle)
-    }
 }
