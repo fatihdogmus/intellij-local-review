@@ -1,7 +1,13 @@
 package dev.fatihdogmus.agenticreview.ui
 
+import com.intellij.codeInsight.multiverse.EditorContextManager
+import com.intellij.codeInsight.multiverse.codeInsightContext
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.util.Disposer
+import com.intellij.psi.PsiDocumentManager
+import com.intellij.testFramework.LightVirtualFile
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.ReviewManagerService
@@ -139,6 +145,35 @@ class ReviewToolWindowPanelIntegrationTest {
             try {
                 assertThat(panel.focusTarget).isNotNull
             } finally {
+                Disposer.dispose(panel)
+            }
+        }
+    }
+
+    @Test
+    fun embeddedEditorContextsAreSeededBeforeDaemonNeedsThem() {
+        ApplicationManager.getApplication().invokeAndWait {
+            val panel = ReviewToolWindowPanel(project)
+            val virtualFile = LightVirtualFile("added-file.txt", PlainTextFileType.INSTANCE, "hello\n")
+            val psiFile = com.intellij.psi.PsiManager.getInstance(project).findFile(virtualFile)
+            val document = psiFile?.let { PsiDocumentManager.getInstance(project).getDocument(it) }
+            requireNotNull(psiFile)
+            requireNotNull(document)
+
+            val editor = EditorFactory.getInstance().createEditor(document, project, virtualFile, true)
+            try {
+                val contextManager = EditorContextManager.getInstance(project)
+                assertThat(contextManager.getCachedEditorContexts(editor)).isNull()
+
+                val method = ReviewToolWindowPanel::class.java.getDeclaredMethod("seedEmbeddedEditorContexts", List::class.java)
+                method.isAccessible = true
+                method.invoke(panel, listOf(editor))
+
+                val cachedContexts = contextManager.getCachedEditorContexts(editor)
+                assertThat(cachedContexts).isNotNull
+                assertThat(cachedContexts!!.mainContext).isEqualTo(psiFile.codeInsightContext)
+            } finally {
+                EditorFactory.getInstance().releaseEditor(editor)
                 Disposer.dispose(panel)
             }
         }
