@@ -31,7 +31,7 @@
     }
   },
   "references": {
-    "intellij-platform": {
+    "intellij-community": {
       "path": "../intellij-community",
       "description": "The actual source code of the Intellij Platform. Conform to it when you need to look into the actual API, implementation details and questions about the Intellij, Intellij Platform and its plugin system"
     }

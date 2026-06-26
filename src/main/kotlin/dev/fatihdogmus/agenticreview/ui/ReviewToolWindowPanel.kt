@@ -27,7 +27,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.ui.JBColor
-import com.intellij.ui.JBSplitter
+import com.intellij.ui.OnePixelSplitter
 import com.intellij.util.ui.JBUI
 import dev.fatihdogmus.agenticreview.ReviewFileNavigator
 import dev.fatihdogmus.agenticreview.ReviewManagerService
@@ -66,7 +66,12 @@ class ReviewToolWindowPanel(
     private val reviewSelectorPanel = createReviewSelectorPanel()
     private val mainContent = createMainContent()
     private var updatingReviewSelector = false
-    private val stateListener: () -> Unit = { refreshUi() }
+    private val stateListener: () -> Unit = {
+        // Comment inlays are attached when a diff viewer is created, so comment mutations
+        // must invalidate cached requests to force the viewer to rebuild immediately.
+        diffRequestCache.clear()
+        refreshUi()
+    }
     private val turnStateListener: () -> Unit = { refreshUi() }
     private val changedFilesByReviewId = mutableMapOf<String, List<ChangedFile>>()
     private val changedFilesLoadSequence = AtomicInteger()
@@ -282,11 +287,9 @@ class ReviewToolWindowPanel(
             minimumSize = Dimension(320, 240)
         }
 
-        return JBSplitter(false, 0.20f).apply {
+        return OnePixelSplitter(false, "agentic.review.changed.files.splitter", 0.20f).apply {
             firstComponent = top
             secondComponent = center
-            setResizeEnabled(false)
-            setDividerWidth(1)
         }
     }
 
