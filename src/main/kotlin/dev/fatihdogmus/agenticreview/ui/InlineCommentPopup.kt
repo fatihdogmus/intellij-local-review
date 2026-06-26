@@ -15,6 +15,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.IconUtil
+import com.intellij.util.ui.JBUI
 import dev.fatihdogmus.agenticreview.ReviewManagerService
 import dev.fatihdogmus.agenticreview.diff.ReviewDiffRequestData
 import dev.fatihdogmus.agenticreview.model.ReviewComment
@@ -26,12 +27,27 @@ import javax.swing.border.AbstractBorder
 private const val PLACEHOLDER_TEXT = "Add comment"
 private const val COMMENT_ACTIONS_PLACE = "AgenticReview.CommentActions"
 private const val COMMENT_CARD_ARC = 18
+private const val COMMENT_PANEL_ARC = 20
 private val BLUE_BORDER =
     UIManager.getColor("Component.focusColor") ?: JBColor(Color(0x35, 0x7A, 0xB8), Color(0x6C, 0xB8, 0xFF))
 private val COMMENT_BORDER = UIManager.getColor("Component.borderColor") ?: JBColor.border()
 private val DELETE_RED = JBColor(Color(0xC4, 0x2B, 0x1C), Color(0xFF, 0x8E, 0x8A))
 private val MENU_HOVER_BG =
     UIManager.getColor("List.selectionBackground") ?: JBColor(Color(0xE8, 0xF1, 0xFF), Color(0x2C, 0x3D, 0x55))
+private val COMMENT_SURFACE_BG =
+    JBColor(Color(0xF9, 0xFA, 0xFC), Color(0x22262B))
+private val COMMENT_FORM_BG =
+    JBColor(Color(0xFB, 0xFC, 0xFF), Color(0x1F242A))
+private val INPUT_BG =
+    UIManager.getColor("TextArea.background") ?: JBColor(Color(0xFF, 0xFF, 0xFF), Color(0x1B, 0x1F, 0x24))
+private val SUBTLE_TEXT =
+    UIManager.getColor("Label.infoForeground") ?: JBColor(Color(0x6B, 0x72, 0x80), Color(0x98, 0xA1, 0xAE))
+private val PRIMARY_BUTTON_BG = JBColor(Color(0x2E, 0x6B, 0xD9), Color(0x3D, 0x7A, 0xED))
+private val PRIMARY_BUTTON_BORDER = JBColor(Color(0x2A, 0x60, 0xC2), Color(0x5D, 0x95, 0xF5))
+private val PRIMARY_BUTTON_FG = JBColor(Color.WHITE, Color.WHITE)
+private val SECONDARY_BUTTON_BG = JBColor(Color(0xF5, 0xF7, 0xFA), Color(0x26, 0x2B, 0x31))
+private val COMMENT_PILL_BG = JBColor(Color(0xEC, 0xF2, 0xFF), Color(0x27364A))
+private val COMMENT_PILL_FG = JBColor(Color(0x244A7A), Color(0xD6E5FF))
 
 fun showReviewCommentInlays(
     project: Project,
@@ -87,19 +103,19 @@ private class InlineCommentFormPanel(
     private val textArea: JBTextArea
 
     init {
-        isOpaque = true
-        background = editor.colorsScheme.defaultBackground
-        border = BorderFactory.createEmptyBorder(8, 16, 8, 16)
+        isOpaque = false
+        border = JBUI.Borders.empty(8, 16, 10, 16)
 
         textArea = JBTextArea(3, 40).apply {
             lineWrap = true
             wrapStyleWord = true
-            border = BorderFactory.createEmptyBorder(4, 4, 4, 4)
+            border = JBUI.Borders.empty(10, 12)
             foreground = JBColor.GRAY
             text = PLACEHOLDER_TEXT
-            background = editor.colorsScheme.defaultBackground
+            background = INPUT_BG
             caretColor = editor.colorsScheme.defaultForeground
             cursor = Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR)
+            font = font.deriveFont(font.size2D + 1f)
 
             addFocusListener(object : FocusAdapter() {
                 override fun focusGained(e: FocusEvent?) {
@@ -118,28 +134,28 @@ private class InlineCommentFormPanel(
             })
         }
 
-        val scrollPane = JScrollPane(textArea).apply {
-            border = BorderFactory.createLineBorder(BLUE_BORDER, 1)
-            preferredSize = Dimension(400, 80)
-            isOpaque = false
-            viewport.isOpaque = false
-        }
+        val scrollPane = createCommentInputScrollPane(textArea)
 
         val hintText = if (endLine != null && endLine > startLine) {
-            "Commenting on lines ${startLine + 1}-${endLine + 1}"
+            "Lines ${startLine + 1}-${endLine + 1}"
         } else {
-            "Commenting on line ${startLine + 1}"
+            "Line ${startLine + 1}"
         }
-        val hintLabel = JLabel(hintText).apply {
-            foreground = JBColor.GRAY
+        val titleLabel = JLabel("New comment").apply {
+            foreground = editor.colorsScheme.defaultForeground
+            font = font.deriveFont(font.style or Font.BOLD)
         }
+        val hintLabel = JLabel("${submitShortcutText()} to submit").apply {
+            foreground = SUBTLE_TEXT
+        }
+        val linePill = createPillLabel(hintText)
 
         val cancelButton = JButton("Cancel").apply {
-            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            applyCommentActionStyle(primary = false)
             addActionListener { dismiss() }
         }
         val commentButton = JButton("Comment").apply {
-            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            applyCommentActionStyle(primary = true)
             addActionListener {
                 val body = textArea.text.trim()
                 if (body.isNotEmpty() && body != PLACEHOLDER_TEXT) {
@@ -162,10 +178,22 @@ private class InlineCommentFormPanel(
         }
         installSubmitShortcut(textArea) { commentButton.doClick() }
 
-        val bottomPanel = JPanel(BorderLayout()).apply {
+        val header = JPanel(BorderLayout(JBUI.scale(12), 0)).apply {
             isOpaque = false
-            add(hintLabel, BorderLayout.WEST)
-            val buttonsPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
+            add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply {
+                isOpaque = false
+                add(titleLabel)
+                add(linePill)
+            }, BorderLayout.WEST)
+            add(hintLabel, BorderLayout.EAST)
+        }
+
+        val bottomPanel = JPanel(BorderLayout(JBUI.scale(12), 0)).apply {
+            isOpaque = false
+            add(JLabel("Comments are attached to this diff line.").apply {
+                foreground = SUBTLE_TEXT
+            }, BorderLayout.WEST)
+            val buttonsPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0)).apply {
                 isOpaque = false
                 add(cancelButton)
                 add(commentButton)
@@ -173,8 +201,15 @@ private class InlineCommentFormPanel(
             add(buttonsPanel, BorderLayout.EAST)
         }
 
-        add(scrollPane, BorderLayout.CENTER)
-        add(bottomPanel, BorderLayout.SOUTH)
+        val card = RoundedSurfacePanel(COMMENT_FORM_BG, COMMENT_BORDER, COMMENT_PANEL_ARC).apply {
+            layout = BorderLayout(0, JBUI.scale(10))
+            border = JBUI.Borders.empty(12, 14)
+            add(header, BorderLayout.NORTH)
+            add(scrollPane, BorderLayout.CENTER)
+            add(bottomPanel, BorderLayout.SOUTH)
+        }
+
+        add(card, BorderLayout.CENTER)
     }
 
     fun requestTextFocus() {
@@ -212,27 +247,26 @@ private class ExistingCommentPanel(
     private val editActionsPanel: JPanel
 
     init {
-        isOpaque = true
-        background = normalBackground
-        border = BorderFactory.createCompoundBorder(
-            RoundedLineBorder(COMMENT_BORDER, COMMENT_CARD_ARC),
-            BorderFactory.createEmptyBorder(8, 12, 8, 12),
-        )
+        isOpaque = false
+        border = JBUI.Borders.empty(8, 16, 10, 16)
 
         val line = comment.anchor.newLine ?: comment.anchor.oldLine ?: 0
         val endLine = comment.anchor.endNewLine ?: comment.anchor.endOldLine
         val lineLabel = if (endLine != null && endLine > line) "Lines $line-$endLine" else "Line $line"
 
-        menuButton = JButton("...").apply {
+        menuButton = JButton().apply {
             icon = AllIcons.Actions.More
             text = null
             isFocusable = false
             isContentAreaFilled = false
             isBorderPainted = false
-            border = BorderFactory.createEmptyBorder(2, 4, 2, 4)
+            isOpaque = false
+            preferredSize = JBUI.size(28, 28)
+            border = JBUI.Borders.empty(4)
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             toolTipText = "Comment actions"
             isVisible = true
+            putClientProperty("JButton.buttonType", "toolbar")
             addActionListener {
                 val group = DefaultActionGroup().apply {
                     add(object : AnAction(
@@ -264,14 +298,22 @@ private class ExistingCommentPanel(
                     })
                 }
                 val menu = ActionManager.getInstance().createActionPopupMenu(COMMENT_ACTIONS_PLACE, group).component
-                menu.show(this, 0, height)
+                menu.border = JBUI.Borders.compound(
+                    BorderFactory.createLineBorder(COMMENT_BORDER, 1),
+                    JBUI.Borders.empty(4)
+                )
+                menu.show(this, width - menu.preferredSize.width, height)
                 SwingUtilities.invokeLater { stylePopupMenu(menu) }
             }
         }
 
         val header = JPanel(BorderLayout()).apply {
             isOpaque = false
-            add(JLabel(lineLabel).apply { foreground = JBColor.GRAY }, BorderLayout.WEST)
+            add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply {
+                isOpaque = false
+                add(createPillLabel(lineLabel))
+                add(JLabel("Open").apply { foreground = SUBTLE_TEXT })
+            }, BorderLayout.WEST)
             add(menuButton, BorderLayout.EAST)
         }
 
@@ -279,14 +321,15 @@ private class ExistingCommentPanel(
             isEditable = false
             lineWrap = true
             wrapStyleWord = true
-            border = BorderFactory.createEmptyBorder()
-            background = normalBackground
+            border = JBUI.Borders.empty(2, 0)
+            background = COMMENT_SURFACE_BG
             foreground = editor.colorsScheme.defaultForeground
             cursor = Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR)
+            font = font.deriveFont(font.size2D + 1f)
         }
 
         val saveButton = JButton("Save").apply {
-            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            applyCommentActionStyle(primary = true)
             addActionListener {
                 val updatedBody = body.text.trim()
                 if (updatedBody.isNotEmpty()) {
@@ -298,34 +341,39 @@ private class ExistingCommentPanel(
         }
         installSubmitShortcut(body) { saveButton.doClick() }
         val cancelButton = JButton("Cancel").apply {
-            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            applyCommentActionStyle(primary = false)
             addActionListener {
                 body.text = comment.body
                 exitEditMode()
             }
         }
-        editActionsPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
+        editActionsPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0)).apply {
             isOpaque = false
             isVisible = false
             add(cancelButton)
             add(saveButton)
         }
 
-        add(header, BorderLayout.NORTH)
-        add(body, BorderLayout.CENTER)
-        add(editActionsPanel, BorderLayout.SOUTH)
-        body.background = normalBackground
+        val card = RoundedSurfacePanel(COMMENT_SURFACE_BG, COMMENT_BORDER, COMMENT_PANEL_ARC).apply {
+            layout = BorderLayout(0, JBUI.scale(10))
+            border = JBUI.Borders.empty(10, 14)
+            add(header, BorderLayout.NORTH)
+            add(body, BorderLayout.CENTER)
+            add(editActionsPanel, BorderLayout.SOUTH)
+        }
+
+        add(card, BorderLayout.CENTER)
     }
 
     private fun enterEditMode() {
         editing = true
         body.isEditable = true
         body.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(BLUE_BORDER, 1),
-            BorderFactory.createEmptyBorder(4, 4, 4, 4),
+            RoundedLineBorder(BLUE_BORDER, COMMENT_CARD_ARC),
+            JBUI.Borders.empty(10, 12),
         )
         editActionsPanel.isVisible = true
-        body.background = UIManager.getColor("TextArea.background") ?: normalBackground
+        body.background = INPUT_BG
         body.requestFocusInWindow()
         body.caretPosition = body.text.length
         revalidate()
@@ -334,9 +382,9 @@ private class ExistingCommentPanel(
     private fun exitEditMode() {
         editing = false
         body.isEditable = false
-        body.border = BorderFactory.createEmptyBorder()
+        body.border = JBUI.Borders.empty(2, 0)
         editActionsPanel.isVisible = false
-        body.background = normalBackground
+        body.background = COMMENT_SURFACE_BG
         revalidate()
     }
 
@@ -351,7 +399,9 @@ private class ExistingCommentPanel(
             component.isOpaque = true
             component.background = defaultBg
             if (component is JMenuItem) {
+                component.border = JBUI.Borders.empty(6, 10)
                 component.iconTextGap = 8
+                component.foreground = UIManager.getColor("MenuItem.foreground") ?: component.foreground
                 if (component.text == "Delete comment") {
                     component.foreground = DELETE_RED
                 }
@@ -366,6 +416,91 @@ private class ExistingCommentPanel(
                 }
             })
         }
+    }
+}
+
+private fun createCommentInputScrollPane(textArea: JBTextArea): JScrollPane = JScrollPane(textArea).apply {
+    border = RoundedLineBorder(BLUE_BORDER, COMMENT_CARD_ARC)
+    preferredSize = Dimension(JBUI.scale(400), JBUI.scale(96))
+    background = INPUT_BG
+    isOpaque = true
+    viewport.background = INPUT_BG
+    viewport.isOpaque = true
+    horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
+}
+
+private fun createPillLabel(text: String): JComponent = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+    isOpaque = false
+    add(PillLabel(text))
+}
+
+private fun JButton.applyCommentActionStyle(primary: Boolean): JButton = apply {
+    cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+    foreground = if (primary) PRIMARY_BUTTON_FG else UIManager.getColor("Button.foreground") ?: JBColor.foreground()
+    background = if (primary) PRIMARY_BUTTON_BG else SECONDARY_BUTTON_BG
+    border = JBUI.Borders.empty(7, 14)
+    isOpaque = false
+    isContentAreaFilled = false
+    isFocusPainted = false
+    putClientProperty(
+        COMMENT_BUTTON_BORDER_COLOR,
+        if (primary) PRIMARY_BUTTON_BORDER else COMMENT_BORDER,
+    )
+}
+
+private fun submitShortcutText(): String = if (System.getProperty("os.name")?.contains("Mac", ignoreCase = true) == true) {
+    "Cmd+Enter"
+} else {
+    "Ctrl+Enter"
+}
+
+private const val COMMENT_BUTTON_BORDER_COLOR = "local.review.commentButtonBorderColor"
+
+private class RoundedSurfacePanel(
+    private val fill: Color,
+    private val stroke: Color,
+    private val arc: Int,
+) : JPanel() {
+    init {
+        isOpaque = false
+    }
+
+    override fun paintComponent(graphics: Graphics) {
+        val g2 = graphics.create() as Graphics2D
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.color = fill
+            g2.fillRoundRect(0, 0, width - 1, height - 1, arc, arc)
+            g2.color = stroke
+            g2.drawRoundRect(0, 0, width - 1, height - 1, arc, arc)
+        } finally {
+            g2.dispose()
+        }
+        super.paintComponent(graphics)
+    }
+}
+
+private class PillLabel(text: String) : JLabel(text) {
+    private val arc = JBUI.scale(COMMENT_CARD_ARC)
+
+    init {
+        isOpaque = false
+        foreground = COMMENT_PILL_FG
+        border = JBUI.Borders.empty(3, 8)
+    }
+
+    override fun paintComponent(graphics: Graphics) {
+        val g2 = graphics.create() as Graphics2D
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.color = COMMENT_PILL_BG
+            g2.fillRoundRect(0, 0, width - 1, height - 1, arc, arc)
+            g2.color = COMMENT_BORDER
+            g2.drawRoundRect(0, 0, width - 1, height - 1, arc, arc)
+        } finally {
+            g2.dispose()
+        }
+        super.paintComponent(graphics)
     }
 }
 
