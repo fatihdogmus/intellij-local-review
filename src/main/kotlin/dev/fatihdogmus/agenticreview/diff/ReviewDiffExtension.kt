@@ -7,6 +7,7 @@ import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.tools.util.base.DiffViewerListener
 import com.intellij.diff.tools.util.side.OnesideTextDiffViewer
 import com.intellij.diff.tools.util.side.TwosideTextDiffViewer
+import com.intellij.openapi.editor.SpellCheckingEditorCustomizationProvider
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.event.EditorMouseEvent
 import com.intellij.openapi.editor.event.EditorMouseMotionListener
@@ -65,6 +66,9 @@ class ReviewDiffExtension : DiffExtension() {
             is TwosideTextDiffViewer -> listOf(viewer.editor1, viewer.editor2)
             is OnesideTextDiffViewer -> listOf(viewer.editor)
             else -> return
+        }
+        SpellCheckingEditorCustomizationProvider.getInstance().disabledCustomization?.let { customization ->
+            allEditors.forEach(customization::customize)
         }
         allEditors.forEach { it.putUserData(REVIEW_DIFF_EDITOR_KEY, requestData) }
         if (requestData.changedFile.status != ChangedFileStatus.DELETED) {

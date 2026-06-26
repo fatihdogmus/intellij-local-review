@@ -6,11 +6,14 @@ import com.intellij.diff.requests.ContentDiffRequest
 import com.intellij.diff.util.DiffUtil
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runReadActionBlocking
+import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.editor.ex.util.LexerEditorHighlighter
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import dev.fatihdogmus.agenticreview.model.DiffSide
@@ -22,6 +25,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @TestApplication
 class DiffRequestBuilderIntegrationTest {
@@ -205,7 +210,297 @@ class DiffRequestBuilderIntegrationTest {
         }
     }
 
+    @Test
+    fun uncommittedModifiedDiffUsesLiveFileDocumentOnAfterSide(@TempDir tempDir: Path) {
+        val repoDir = tempDir.resolve("repo")
+        val srcDir = repoDir.resolve("src")
+        Files.createDirectories(srcDir)
+        val sourceFile = Files.writeString(srcDir.resolve("Foo.java"), "after\n")
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(sourceFile)!!
+
+        val changedFile = ChangedFile(
+            filePath = "src/Foo.java",
+            status = ChangedFileStatus.MODIFIED,
+            beforeContent = ReviewContent("before\n", "HEAD", "src/Foo.java"),
+            afterContent = ReviewContent("after\n", "WORKTREE", "src/Foo.java"),
+        )
+
+        val request = DiffRequestBuilder(project).buildForFile(
+            "review-uncommitted",
+            changedFile,
+            repoDir.toString(),
+            allowEditing = true,
+        ) as ContentDiffRequest
+
+        val afterContent = request.contents[1] as DocumentContent
+        val liveDocument = runReadActionBlocking { FileDocumentManager.getInstance().getDocument(virtualFile) }
+
+        assertThat(liveDocument).isNotNull
+        assertThat(afterContent.document).isSameAs(liveDocument)
+    }
+
+    @Test
+    fun manualReviewDiffKeepsAfterSideDetachedFromLiveFile(@TempDir tempDir: Path) {
+        val repoDir = tempDir.resolve("repo")
+        val srcDir = repoDir.resolve("src")
+        Files.createDirectories(srcDir)
+        val sourceFile = Files.writeString(srcDir.resolve("Foo.java"), "after\n")
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(sourceFile)!!
+
+        val changedFile = ChangedFile(
+            filePath = "src/Foo.java",
+            status = ChangedFileStatus.MODIFIED,
+            beforeContent = ReviewContent("before\n", "HEAD", "src/Foo.java"),
+            afterContent = ReviewContent("after\n", "WORKTREE", "src/Foo.java"),
+        )
+
+        val request = DiffRequestBuilder(project).buildForFile(
+            "review-manual",
+            changedFile,
+            repoDir.toString(),
+            allowEditing = false,
+        ) as ContentDiffRequest
+
+        val afterContent = request.contents[1] as DocumentContent
+        val liveDocument = runReadActionBlocking { FileDocumentManager.getInstance().getDocument(virtualFile) }
+
+        assertThat(liveDocument).isNotNull
+        assertThat(afterContent.document).isNotSameAs(liveDocument)
+    }
+
+    @Test
+    fun uncommittedAddedDiffUsesLiveFileDocument(@TempDir tempDir: Path) {
+        val repoDir = tempDir.resolve("repo")
+        val srcDir = repoDir.resolve("src")
+        Files.createDirectories(srcDir)
+        val sourceFile = Files.writeString(srcDir.resolve("NewFile.java"), "after\n")
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(sourceFile)!!
+
+        val changedFile = ChangedFile(
+            filePath = "src/NewFile.java",
+            status = ChangedFileStatus.ADDED,
+            beforeContent = null,
+            afterContent = ReviewContent("after\n", "WORKTREE", "src/NewFile.java"),
+        )
+
+        val request = DiffRequestBuilder(project).buildForFile(
+            "review-added-live",
+            changedFile,
+            repoDir.toString(),
+            allowEditing = true,
+        ) as ContentDiffRequest
+
+        val afterContent = request.contents[1] as DocumentContent
+        val liveDocument = runReadActionBlocking { FileDocumentManager.getInstance().getDocument(virtualFile) }
+
+        assertThat(liveDocument).isNotNull
+        assertThat(afterContent.document).isSameAs(liveDocument)
+    }
+
+    @Test
+    fun uncommittedRenamedDiffUsesLiveFileDocumentOnAfterSide(@TempDir tempDir: Path) {
+        val repoDir = tempDir.resolve("repo")
+        val newDir = repoDir.resolve("src/new")
+        Files.createDirectories(newDir)
+        val sourceFile = Files.writeString(newDir.resolve("NewName.java"), "after\n")
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(sourceFile)!!
+
+        val changedFile = ChangedFile(
+            filePath = "src/new/NewName.java",
+            status = ChangedFileStatus.RENAMED,
+            beforeContent = ReviewContent("before\n", "HEAD", "src/old/OldName.java"),
+            afterContent = ReviewContent("after\n", "WORKTREE", "src/new/NewName.java"),
+            previousFilePath = "src/old/OldName.java",
+        )
+
+        val request = DiffRequestBuilder(project).buildForFile(
+            "review-renamed-live",
+            changedFile,
+            repoDir.toString(),
+            allowEditing = true,
+        ) as ContentDiffRequest
+
+        val afterContent = request.contents[1] as DocumentContent
+        val liveDocument = runReadActionBlocking { FileDocumentManager.getInstance().getDocument(virtualFile) }
+
+        assertThat(liveDocument).isNotNull
+        assertThat(afterContent.document).isSameAs(liveDocument)
+    }
+
+    @Test
+    fun viewerEditorsAreEditableOnlyForAllowedUncommittedSides(@TempDir tempDir: Path) {
+        val repoDir = tempDir.resolve("repo")
+        val srcDir = repoDir.resolve("src")
+        Files.createDirectories(srcDir)
+        Files.writeString(srcDir.resolve("Foo.java"), "after\n")
+        Files.writeString(srcDir.resolve("Added.java"), "added\n")
+        Files.writeString(srcDir.resolve("NewName.java"), "renamed\n")
+        LocalFileSystem.getInstance().refreshAndFindFileByNioFile(repoDir)
+
+        val modified = ChangedFile(
+            filePath = "src/Foo.java",
+            status = ChangedFileStatus.MODIFIED,
+            beforeContent = ReviewContent("before\n", "HEAD", "src/Foo.java"),
+            afterContent = ReviewContent("after\n", "WORKTREE", "src/Foo.java"),
+        )
+        val added = ChangedFile(
+            filePath = "src/Added.java",
+            status = ChangedFileStatus.ADDED,
+            beforeContent = null,
+            afterContent = ReviewContent("added\n", "WORKTREE", "src/Added.java"),
+        )
+        val deleted = ChangedFile(
+            filePath = "src/Deleted.java",
+            status = ChangedFileStatus.DELETED,
+            beforeContent = ReviewContent("gone\n", "HEAD", "src/Deleted.java"),
+            afterContent = null,
+        )
+        val renamed = ChangedFile(
+            filePath = "src/NewName.java",
+            status = ChangedFileStatus.RENAMED,
+            beforeContent = ReviewContent("before\n", "HEAD", "src/OldName.java"),
+            afterContent = ReviewContent("renamed\n", "WORKTREE", "src/NewName.java"),
+            previousFilePath = "src/OldName.java",
+        )
+
+        val modifiedEditors = showRequestAndCaptureLiveDocumentStates(
+            changedFile = modified,
+            repositoryRoot = repoDir,
+            request = DiffRequestBuilder(project).buildForFile("review-modified", modified, repoDir.toString(), allowEditing = true)
+        )
+        assertThat(modifiedEditors).hasSize(2)
+        assertThat(modifiedEditors[0]).isFalse()
+        assertThat(modifiedEditors[1]).isTrue()
+
+        val addedEditors = showRequestAndCaptureLiveDocumentStates(
+            changedFile = added,
+            repositoryRoot = repoDir,
+            request = DiffRequestBuilder(project).buildForFile("review-added", added, repoDir.toString(), allowEditing = true)
+        )
+        assertThat(addedEditors).hasSize(1)
+        assertThat(addedEditors.single()).isTrue()
+
+        val deletedEditors = showRequestAndCaptureLiveDocumentStates(
+            changedFile = deleted,
+            repositoryRoot = repoDir,
+            request = DiffRequestBuilder(project).buildForFile("review-deleted", deleted, repoDir.toString(), allowEditing = true)
+        )
+        assertThat(deletedEditors).hasSize(1)
+        assertThat(deletedEditors.single()).isFalse()
+
+        val renamedEditors = showRequestAndCaptureLiveDocumentStates(
+            changedFile = renamed,
+            repositoryRoot = repoDir,
+            request = DiffRequestBuilder(project).buildForFile("review-renamed", renamed, repoDir.toString(), allowEditing = true)
+        )
+        assertThat(renamedEditors).hasSize(2)
+        assertThat(renamedEditors[0]).isFalse()
+        assertThat(renamedEditors[1]).isTrue()
+
+        val manualEditors = showRequestAndCaptureLiveDocumentStates(
+            changedFile = modified,
+            repositoryRoot = repoDir,
+            request = DiffRequestBuilder(project).buildForFile("review-manual", modified, repoDir.toString(), allowEditing = false)
+        )
+        assertThat(manualEditors).hasSize(2)
+        assertThat(manualEditors).containsExactly(false, false)
+    }
+
+    @Test
+    fun reviewDiffEditorsDisableSpellchecking(@TempDir tempDir: Path) {
+        val repoDir = tempDir.resolve("repo")
+        val srcDir = repoDir.resolve("src")
+        Files.createDirectories(srcDir)
+        Files.writeString(srcDir.resolve("Foo.java"), "after\n")
+        LocalFileSystem.getInstance().refreshAndFindFileByNioFile(repoDir)
+
+        val modified = ChangedFile(
+            filePath = "src/Foo.java",
+            status = ChangedFileStatus.MODIFIED,
+            beforeContent = ReviewContent("before\n", "HEAD", "src/Foo.java"),
+            afterContent = ReviewContent("after\n", "WORKTREE", "src/Foo.java"),
+        )
+
+        val spellcheckStates = showRequestAndCaptureSpellcheckStates(
+            DiffRequestBuilder(project).buildForFile("review-modified", modified, repoDir.toString(), allowEditing = true)
+        )
+
+        assertThat(spellcheckStates).isNotEmpty
+        assertThat(spellcheckStates).allMatch { it }
+    }
+
     private fun createHighlighter(content: DocumentContent) = runReadActionBlocking {
         DiffUtil.createEditorHighlighter(project, content)
     }
+
+    private fun showRequestAndCaptureLiveDocumentStates(
+        changedFile: ChangedFile,
+        repositoryRoot: Path,
+        request: com.intellij.diff.requests.DiffRequest,
+    ): List<Boolean> {
+        val latch = CountDownLatch(1)
+        val liveDocumentStates = mutableListOf<Boolean>()
+        val liveFile = changedFile.afterContent?.let {
+            LocalFileSystem.getInstance().refreshAndFindFileByNioFile(repositoryRoot.resolve(changedFile.filePath))
+        }
+        val liveDocument = liveFile?.let { runReadActionBlocking { FileDocumentManager.getInstance().getDocument(it) } }
+
+        request.getUserData(REVIEW_DIFF_REQUEST_DATA_KEY)?.let { requestData ->
+            request.putUserData(REVIEW_DIFF_REQUEST_DATA_KEY, requestData.copy(onEditorsCreated = { editors ->
+                liveDocumentStates.clear()
+                liveDocumentStates.addAll(editors.map { (it as EditorEx).document == liveDocument })
+                latch.countDown()
+            }))
+        }
+
+        ApplicationManager.getApplication().invokeAndWait {
+            val disposable = Disposer.newDisposable()
+            try {
+                val panel = DiffManager.getInstance().createRequestPanel(project, disposable, null)
+                panel.setRequest(request)
+                assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue()
+            } finally {
+                Disposer.dispose(disposable)
+            }
+        }
+
+        return liveDocumentStates.toList()
+    }
+
+    private fun showRequestAndCaptureSpellcheckStates(request: com.intellij.diff.requests.DiffRequest): List<Boolean> {
+        val latch = CountDownLatch(1)
+        val spellcheckStates = mutableListOf<Boolean>()
+
+        request.getUserData(REVIEW_DIFF_REQUEST_DATA_KEY)?.let { requestData ->
+            request.putUserData(REVIEW_DIFF_REQUEST_DATA_KEY, requestData.copy(onEditorsCreated = { editors ->
+                spellcheckStates.clear()
+                spellcheckStates.addAll(editors.map { editor ->
+                    val psiFile = runReadActionBlocking {
+                        PsiDocumentManager.getInstance(project).getPsiFile((editor as EditorEx).document)
+                    }
+                    psiFile != null && isSpellCheckingDisabled(psiFile)
+                })
+                latch.countDown()
+            }))
+        }
+
+        ApplicationManager.getApplication().invokeAndWait {
+            val disposable = Disposer.newDisposable()
+            try {
+                val panel = DiffManager.getInstance().createRequestPanel(project, disposable, null)
+                panel.setRequest(request)
+                assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue()
+            } finally {
+                Disposer.dispose(disposable)
+            }
+        }
+
+        return spellcheckStates.toList()
+    }
+
+    private fun isSpellCheckingDisabled(psiFile: com.intellij.psi.PsiFile): Boolean = runCatching {
+        val customizationClass = Class.forName("com.intellij.spellchecker.ui.SpellCheckingEditorCustomization")
+        val method = customizationClass.getMethod("isSpellCheckingDisabled", com.intellij.psi.PsiFile::class.java)
+        method.invoke(null, psiFile) as Boolean
+    }.getOrDefault(false)
 }

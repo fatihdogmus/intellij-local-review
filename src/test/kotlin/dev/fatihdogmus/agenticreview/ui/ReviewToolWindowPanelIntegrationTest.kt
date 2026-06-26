@@ -4,9 +4,12 @@ import com.intellij.codeInsight.multiverse.EditorContextManager
 import com.intellij.codeInsight.multiverse.codeInsightContext
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiManager
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
@@ -19,6 +22,7 @@ import dev.fatihdogmus.agenticreview.testutil.turnCombo
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.nio.file.Files
 import java.nio.file.Path
 import javax.swing.JComboBox
 import javax.swing.JLabel
@@ -172,6 +176,38 @@ class ReviewToolWindowPanelIntegrationTest {
                 val cachedContexts = contextManager.getCachedEditorContexts(editor)
                 assertThat(cachedContexts).isNotNull
                 assertThat(cachedContexts!!.mainContext).isEqualTo(psiFile.codeInsightContext)
+            } finally {
+                EditorFactory.getInstance().releaseEditor(editor)
+                Disposer.dispose(panel)
+            }
+        }
+    }
+
+    @Test
+    fun embeddedEditorContextsAreNotSeededForLocalFileBackedEditors() {
+        ApplicationManager.getApplication().invokeAndWait {
+            val panel = ReviewToolWindowPanel(project)
+            val path = Path.of(project.basePath!!, "src", "LiveFile.txt")
+            Files.createDirectories(path.parent)
+            Files.writeString(path, "hello\n")
+
+            val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
+            val document = virtualFile?.let { FileDocumentManager.getInstance().getDocument(it) }
+            val psiFile = virtualFile?.let { PsiManager.getInstance(project).findFile(it) }
+            requireNotNull(virtualFile)
+            requireNotNull(document)
+            requireNotNull(psiFile)
+
+            val editor = EditorFactory.getInstance().createEditor(document, project, virtualFile, false)
+            try {
+                val contextManager = EditorContextManager.getInstance(project)
+                assertThat(contextManager.getCachedEditorContexts(editor)).isNull()
+
+                val method = ReviewToolWindowPanel::class.java.getDeclaredMethod("seedEmbeddedEditorContexts", List::class.java)
+                method.isAccessible = true
+                method.invoke(panel, listOf(editor))
+
+                assertThat(contextManager.getCachedEditorContexts(editor)).isNull()
             } finally {
                 EditorFactory.getInstance().releaseEditor(editor)
                 Disposer.dispose(panel)

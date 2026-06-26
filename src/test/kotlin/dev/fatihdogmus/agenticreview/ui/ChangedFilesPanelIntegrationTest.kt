@@ -83,6 +83,34 @@ class ChangedFilesPanelIntegrationTest {
     }
 
     @Test
+    fun treeRendererShowsAccurateStatsForDisjointEdits() {
+        onEdt {
+            val panel = ChangedFilesPanel()
+            val modified = ChangedFile(
+                filePath = "src/Foo.kt",
+                status = ChangedFileStatus.MODIFIED,
+                beforeContent = ReviewContent(
+                    "one\nshared\ntwo\nshared-again\nthree\n",
+                    "before",
+                    "src/Foo.kt",
+                ),
+                afterContent = ReviewContent(
+                    "ONE\nshared\ntwo\nshared-again\nTHREE\n",
+                    "after",
+                    "src/Foo.kt",
+                ),
+            )
+            panel.setReviewFiles(listOf(modified), selectedFilePath = null, seenFileKeys = emptySet())
+
+            val rowTexts = treeRowTexts(reviewTree(panel))
+            val fileRow = rowTexts.single { it.contains("Foo.kt") }
+
+            assertThat(fileRow).contains("+2")
+            assertThat(fileRow).contains("-2")
+        }
+    }
+
+    @Test
     fun treeCompactsSingleChildDirectoryChains() {
         onEdt {
             val panel = ChangedFilesPanel()

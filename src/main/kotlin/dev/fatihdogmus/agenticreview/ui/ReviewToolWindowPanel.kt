@@ -15,6 +15,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAwareAction
@@ -173,6 +174,7 @@ class ReviewToolWindowPanel(
                         reviewId,
                         changedFile,
                         repositoryRoot,
+                        allowEditing = review?.target?.type == ReviewTargetType.UNCOMMITTED,
                         onEditorsCreated = { editors ->
                             diffPanel.setEmbeddedEditors(editors)
                             seedEmbeddedEditorContexts(editors)
@@ -214,6 +216,7 @@ class ReviewToolWindowPanel(
                     turn.id,
                     matchedDiff,
                     repositoryRoot,
+                    allowEditing = false,
                     onEditorsCreated = { editors ->
                         diffPanel.setEmbeddedEditors(editors)
                         seedEmbeddedEditorContexts(editors)
@@ -230,6 +233,7 @@ class ReviewToolWindowPanel(
 
         for (editor in editors) {
             if (contextManager.getCachedEditorContexts(editor) != null) continue
+            if (FileDocumentManager.getInstance().getFile(editor.document)?.isInLocalFileSystem == true) continue
 
             val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: continue
             contextManager.setEditorContextNoFire(editor, SingleEditorContext(psiFile.codeInsightContext))

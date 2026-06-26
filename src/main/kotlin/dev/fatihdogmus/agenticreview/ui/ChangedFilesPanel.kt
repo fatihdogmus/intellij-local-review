@@ -1,5 +1,8 @@
 package dev.fatihdogmus.agenticreview.ui
 
+import com.intellij.diff.comparison.ComparisonManager
+import com.intellij.diff.comparison.ComparisonPolicy
+import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.IdeActions
@@ -347,6 +350,7 @@ private class ChangedFileTreeRenderer(
 ) : ColoredTreeCellRenderer() {
     private val addedColor = JBColor(0x1A7F37, 0x3FB950)
     private val deletedColor = JBColor(0xCF222E, 0xF85149)
+    private val lineStatsCache = mutableMapOf<String, LineStats>()
 
     override fun customizeCellRenderer(
         tree: JTree,
@@ -389,32 +393,33 @@ private class ChangedFileTreeRenderer(
     }
 
     // Keep list rendering cheap on the EDT. This badge is only a summary, so we
-    // estimate the changed middle range instead of running the full diff engine.
+    // cache line-fragment stats per file revision pair instead of recomputing on every paint.
     private fun estimateLineStats(value: ChangedFile): LineStats {
+        return lineStatsCache.getOrPut(value.seenKey()) { computeLineStats(value) }
+    }
+
+    private fun computeLineStats(value: ChangedFile): LineStats {
         val before = value.beforeContent?.text.orEmpty()
         val after = value.afterContent?.text.orEmpty()
         if (before.isEmpty() && after.isEmpty()) return LineStats(0, 0)
         if (before.isEmpty()) return LineStats(countLines(after), 0)
         if (after.isEmpty()) return LineStats(0, countLines(before))
 
-        val beforeLines = before.lines()
-        val afterLines = after.lines()
-
-        var prefix = 0
-        while (prefix < beforeLines.size && prefix < afterLines.size && beforeLines[prefix] == afterLines[prefix]) {
-            prefix += 1
+        return try {
+            val fragments = ComparisonManager.getInstance().compareLines(
+                before,
+                after,
+                ComparisonPolicy.DEFAULT,
+                EmptyProgressIndicator(),
+            )
+            LineStats(
+                added = fragments.sumOf { it.endLine2 - it.startLine2 },
+                deleted = fragments.sumOf { it.endLine1 - it.startLine1 },
+            )
+        } catch (_: Throwable) {
+            // Fall back to whole-file counts if diff computation fails for any reason.
+            LineStats(countLines(after), countLines(before))
         }
-
-        var beforeSuffix = beforeLines.lastIndex
-        var afterSuffix = afterLines.lastIndex
-        while (beforeSuffix >= prefix && afterSuffix >= prefix && beforeLines[beforeSuffix] == afterLines[afterSuffix]) {
-            beforeSuffix -= 1
-            afterSuffix -= 1
-        }
-
-        val deleted = (beforeSuffix - prefix + 1).coerceAtLeast(0)
-        val added = (afterSuffix - prefix + 1).coerceAtLeast(0)
-        return LineStats(added, deleted)
     }
 
     private fun countLines(text: String): Int = if (text.isEmpty()) 0 else text.lines().size
