@@ -159,7 +159,7 @@ class ReviewToolWindowPanelIntegrationTest {
         ApplicationManager.getApplication().invokeAndWait {
             val panel = ReviewToolWindowPanel(project)
             val virtualFile = LightVirtualFile("added-file.txt", PlainTextFileType.INSTANCE, "hello\n")
-            val psiFile = com.intellij.psi.PsiManager.getInstance(project).findFile(virtualFile)
+            val psiFile = PsiManager.getInstance(project).findFile(virtualFile)
             val document = psiFile?.let { PsiDocumentManager.getInstance(project).getDocument(it) }
             requireNotNull(psiFile)
             requireNotNull(document)

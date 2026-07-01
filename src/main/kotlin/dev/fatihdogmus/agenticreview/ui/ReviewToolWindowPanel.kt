@@ -1,9 +1,6 @@
 package dev.fatihdogmus.agenticreview.ui
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
-import com.intellij.codeInsight.multiverse.EditorContextManager
-import com.intellij.codeInsight.multiverse.SingleEditorContext
-import com.intellij.codeInsight.multiverse.codeInsightContext
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.requests.MessageDiffRequest
 import com.intellij.icons.AllIcons
@@ -57,7 +54,7 @@ class ReviewToolWindowPanel(
     private val diffRequestBuilder = DiffRequestBuilder(project)
     private val diffPanel = ReviewDiffPanel(project, this)
 
-    val embeddedEditors: List<com.intellij.openapi.editor.Editor>
+    val embeddedEditors: List<Editor>
         get() = diffPanel.embeddedEditors
     private val changedFilesPanel = ChangedFilesPanel()
     private val contentPanel = JPanel(BorderLayout())
@@ -228,16 +225,15 @@ class ReviewToolWindowPanel(
     }
 
     private fun seedEmbeddedEditorContexts(editors: List<Editor>) {
-        val contextManager = EditorContextManager.getInstance(project)
         val psiFilesToRestart = linkedSetOf<com.intellij.psi.PsiFile>()
 
         for (editor in editors) {
-            if (contextManager.getCachedEditorContexts(editor) != null) continue
             if (FileDocumentManager.getInstance().getFile(editor.document)?.isInLocalFileSystem == true) continue
 
             val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: continue
-            contextManager.setEditorContextNoFire(editor, SingleEditorContext(psiFile.codeInsightContext))
-            psiFilesToRestart += psiFile
+            if (seedEditorContextReflectively(editor, psiFile)) {
+                psiFilesToRestart += psiFile
+            }
         }
 
         if (psiFilesToRestart.isEmpty()) return
@@ -245,6 +241,48 @@ class ReviewToolWindowPanel(
         val daemon = DaemonCodeAnalyzer.getInstance(project)
         psiFilesToRestart.forEach { psiFile ->
             daemon.restart(psiFile, "Seed diff editor context")
+        }
+    }
+
+    private fun seedEditorContextReflectively(editor: Editor, psiFile: com.intellij.psi.PsiFile): Boolean {
+        return try {
+            val managerClass = Class.forName("com.intellij.codeInsight.multiverse.EditorContextManager")
+            val manager = managerClass.getMethod("getInstance", Project::class.java).invoke(null, project) ?: return false
+
+            val cachedMethod = managerClass.methods.firstOrNull {
+                it.name == "getCachedEditorContexts" && it.parameterCount == 1
+            }
+            if (cachedMethod?.invoke(manager, editor) != null) return false
+
+            val context = resolveEditorContextReflectively(psiFile) ?: return false
+            val singleContextClass = Class.forName("com.intellij.codeInsight.multiverse.SingleEditorContext")
+            val singleContext = singleContextClass.constructors.firstOrNull { it.parameterCount == 1 }?.newInstance(context)
+                ?: return false
+
+            val setter = managerClass.methods.firstOrNull {
+                it.name == "setEditorContextNoFire" && it.parameterCount == 2
+            } ?: managerClass.methods.firstOrNull {
+                it.name == "setEditorContext" && it.parameterCount == 2
+            } ?: return false
+
+            setter.invoke(manager, editor, singleContext)
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun resolveEditorContextReflectively(psiFile: com.intellij.psi.PsiFile): Any? {
+        return try {
+            val utilClass = Class.forName("com.intellij.codeInsight.multiverse.CodeInsightContextUtil")
+            utilClass.getMethod("getCodeInsightContext", com.intellij.psi.PsiFile::class.java).invoke(null, psiFile)
+        } catch (_: Throwable) {
+            try {
+                val contextsClass = Class.forName("com.intellij.codeInsight.multiverse.CodeInsightContexts")
+                contextsClass.getMethod("defaultContext").invoke(null)
+            } catch (_: Throwable) {
+                null
+            }
         }
     }
 

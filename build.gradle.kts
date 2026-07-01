@@ -44,7 +44,7 @@ intellijPlatform {
     pluginConfiguration {
         version = providers.gradleProperty("version")
         ideaVersion {
-            sinceBuild = "253.*"
+            sinceBuild = "253"
         }
     }
 
