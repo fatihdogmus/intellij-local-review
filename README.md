@@ -1,5 +1,14 @@
 # Agentic Review
 
+[![JetBrains plugins](https://img.shields.io/jetbrains/plugin/v/31653.svg)](https://plugins.jetbrains.com/plugin/31653-agentic-review)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/31653.svg)](https://plugins.jetbrains.com/plugin/31653-agentic-review)
+
+<p align="center">
+  <a href="https://plugins.jetbrains.com/plugin/31653-agentic-review" id="install-plugin"></a>
+  <script src="https://plugins.jetbrains.com/assets/scripts/mp-widget.js"></script>
+  <script>MarketplaceWidget.setupMarketplaceWidget('install', 31653, '#install-plugin');</script>
+</p>
+
 Agentic Review is an IntelliJ IDEA plugin for doing lightweight code review inside your local workspace.
 
 Instead of pushing a branch and waiting for a remote PR, you can open a review for:

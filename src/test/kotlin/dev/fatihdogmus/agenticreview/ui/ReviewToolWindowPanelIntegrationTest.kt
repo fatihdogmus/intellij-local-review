@@ -184,7 +184,7 @@ class ReviewToolWindowPanelIntegrationTest {
     }
 
     @Test
-    fun embeddedEditorContextsAreNotSeededForLocalFileBackedEditors() {
+    fun embeddedEditorContextsAreSeededForLocalFileBackedEditors() {
         ApplicationManager.getApplication().invokeAndWait {
             val panel = ReviewToolWindowPanel(project)
             val path = Path.of(project.basePath!!, "src", "LiveFile.txt")
@@ -207,7 +207,9 @@ class ReviewToolWindowPanelIntegrationTest {
                 method.isAccessible = true
                 method.invoke(panel, listOf(editor))
 
-                assertThat(contextManager.getCachedEditorContexts(editor)).isNull()
+                val cachedContexts = contextManager.getCachedEditorContexts(editor)
+                assertThat(cachedContexts).isNotNull
+                assertThat(cachedContexts!!.mainContext).isEqualTo(psiFile.codeInsightContext)
             } finally {
                 EditorFactory.getInstance().releaseEditor(editor)
                 Disposer.dispose(panel)

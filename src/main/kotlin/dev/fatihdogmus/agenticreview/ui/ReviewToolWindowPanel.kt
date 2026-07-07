@@ -12,7 +12,6 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAwareAction
@@ -228,8 +227,6 @@ class ReviewToolWindowPanel(
         val psiFilesToRestart = linkedSetOf<com.intellij.psi.PsiFile>()
 
         for (editor in editors) {
-            if (FileDocumentManager.getInstance().getFile(editor.document)?.isInLocalFileSystem == true) continue
-
             val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: continue
             if (seedEditorContextReflectively(editor, psiFile)) {
                 psiFilesToRestart += psiFile
