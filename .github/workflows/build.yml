@@ -59,6 +59,12 @@ jobs:
       - name: Build plugin
         run: ./gradlew buildPlugin
 
+      - name: Validate plugin archive
+        run: |
+          for archive in ./build/distributions/*.zip; do
+            unzip -tq "$archive"
+          done
+
       # Store an already-built plugin as an artifact for downloading
       - name: Upload artifact
         uses: actions/upload-artifact@v7
